@@ -79,6 +79,13 @@ Create `.devcontainer/devcontainer.json`:
 4. **Run tests** - Docker available for integration tests
 5. **Commit changes** - following our approval workflow
 
+### Container-First Development
+- **All frontend/backend commands must be run inside respective dev compose containers**
+- Use `docker-compose exec backend <command>` for backend operations
+- Use `docker-compose exec frontend <command>` for frontend operations
+- Ensures consistent environment across all team members
+- Prevents "works on my machine" issues
+
 ## Integration Points
 
 ### FastAPI + Dev Containers
