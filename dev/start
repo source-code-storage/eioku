@@ -1,0 +1,19 @@
+#!/bin/bash
+set -e
+
+echo "🚀 Starting Eioku development environment..."
+
+cd "$(dirname "$0")"
+
+# Build and start services
+docker-compose up --build -d
+
+echo "✅ Development environment started!"
+echo ""
+echo "🌐 Application: http://localhost:8080"
+echo "🔧 Backend API: http://localhost:8080/api/"
+echo "🎨 Frontend: http://localhost:8080/"
+echo "💚 Health: http://localhost:8080/health"
+echo ""
+echo "📋 View logs: docker-compose -f dev/docker-compose.yml logs -f"
+echo "🛑 Stop: ./dev/stop"

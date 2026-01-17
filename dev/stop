@@ -1,0 +1,11 @@
+#!/bin/bash
+set -e
+
+echo "🛑 Stopping Eioku development environment..."
+
+cd "$(dirname "$0")"
+
+# Stop and remove containers
+docker-compose down
+
+echo "✅ Development environment stopped!"
