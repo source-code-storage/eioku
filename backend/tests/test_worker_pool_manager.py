@@ -219,7 +219,10 @@ class TestWorkerPoolManager:
     def test_add_worker_pool(self):
         """Test adding worker pools."""
         config = WorkerConfig(
-            task_type=TaskType.HASH, worker_count=2, resource_type=ResourceType.CPU, priority=1
+            task_type=TaskType.HASH,
+            worker_count=2,
+            resource_type=ResourceType.CPU,
+            priority=1,
         )
 
         self.manager.add_worker_pool(config)
@@ -230,7 +233,10 @@ class TestWorkerPoolManager:
     def test_add_duplicate_pool_raises_error(self):
         """Test adding duplicate pool raises error."""
         config = WorkerConfig(
-            task_type=TaskType.HASH, worker_count=2, resource_type=ResourceType.CPU, priority=1
+            task_type=TaskType.HASH,
+            worker_count=2,
+            resource_type=ResourceType.CPU,
+            priority=1,
         )
 
         self.manager.add_worker_pool(config)
@@ -270,7 +276,10 @@ class TestWorkerPoolManager:
     def test_get_status(self):
         """Test getting pool status."""
         config = WorkerConfig(
-            task_type=TaskType.HASH, worker_count=2, resource_type=ResourceType.CPU, priority=1
+            task_type=TaskType.HASH,
+            worker_count=2,
+            resource_type=ResourceType.CPU,
+            priority=1,
         )
 
         self.manager.add_worker_pool(config)

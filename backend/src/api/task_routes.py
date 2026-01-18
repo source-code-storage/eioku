@@ -45,7 +45,55 @@ async def trigger_task_processing(db: Session = Depends(get_db)) -> dict:
         raise HTTPException(status_code=500, detail=f"Task processing failed: {e}")
 
 
-@router.get("/status")
+@router.post("/create-transcription-task")
+async def create_transcription_task(
+    video_id: str, db: Session = Depends(get_db)
+) -> dict:
+    """Create a transcription task for a hashed video."""
+    try:
+        import uuid
+        from datetime import datetime
+
+        from sqlalchemy import text
+
+        # Check if video exists and is hashed
+        video_result = db.execute(
+            text(
+                "SELECT * FROM videos WHERE video_id = :video_id AND status = 'hashed'"
+            ),
+            {"video_id": video_id},
+        ).fetchone()
+
+        if not video_result:
+            return {"status": "error", "message": "Video not found or not hashed"}
+
+        # Create transcription task
+        task_id = str(uuid.uuid4())
+        db.execute(
+            text(
+                """
+            INSERT INTO tasks (task_id, video_id, task_type, status, priority,
+                              dependencies, created_at)
+            VALUES (:task_id, :video_id, 'transcription', 'pending', 1, '[]',
+                    :created_at)
+        """
+            ),
+            {
+                "task_id": task_id,
+                "video_id": video_id,
+                "created_at": datetime.utcnow(),
+            },
+        )
+        db.commit()
+
+        logger.info(f"Created transcription task {task_id} for video {video_id}")
+        return {"message": f"Created transcription task: {task_id}"}
+
+    except Exception as e:
+        logger.error(f"Failed to create transcription task: {e}")
+        return {"status": "error", "message": str(e)}
+
+
 async def get_task_status(db: Session = Depends(get_db)) -> dict:
     """Get current task processing status."""
     try:

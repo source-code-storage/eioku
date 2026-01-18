@@ -53,10 +53,8 @@ async def lifespan(app: FastAPI):
         try:
             from src.repositories.task_repository import SQLAlchemyTaskRepository
             from src.repositories.video_repository import SqlVideoRepository
-            from src.services.file_hash_service import FileHashService
             from src.services.task_orchestrator import TaskOrchestrator
             from src.services.worker_pool_manager import (
-                HashWorker,
                 WorkerPoolManager,
             )
 
@@ -68,15 +66,36 @@ async def lifespan(app: FastAPI):
             # Create and start worker pool manager
             pool_manager = WorkerPoolManager(orchestrator)
 
+            # Add worker pools for hash and transcription processing
+            from src.services.task_orchestration import TaskType
+            from src.services.worker_pool_manager import ResourceType, WorkerConfig
+
             # Add hash worker pool
-            hash_service = FileHashService()
-            HashWorker(hash_service=hash_service)
+            hash_config = WorkerConfig(
+                task_type=TaskType.HASH,
+                worker_count=2,
+                resource_type=ResourceType.CPU,
+                priority=1,
+            )
+            pool_manager.add_worker_pool(hash_config)
+
+            # Add transcription worker pool
+            transcription_config = WorkerConfig(
+                task_type=TaskType.TRANSCRIPTION,
+                worker_count=1,  # CPU intensive, limit to 1
+                resource_type=ResourceType.CPU,
+                priority=1,
+            )
+            pool_manager.add_worker_pool(transcription_config)
+
+            # Start all worker pools
+            pool_manager.start_all()
 
             # Store in app state for access during runtime
             app.state.pool_manager = pool_manager
             app.state.orchestrator = orchestrator
 
-            logger.info("Worker pool initialized successfully")
+            logger.info("Worker pools started successfully")
 
         except Exception as e:
             logger.error(f"Failed to start worker pool: {e}")
@@ -94,7 +113,8 @@ async def lifespan(app: FastAPI):
     if hasattr(app.state, "pool_manager"):
         try:
             logger.info("Stopping worker pools...")
-            # Add shutdown logic here when needed
+            app.state.pool_manager.stop_all()
+            logger.info("Worker pools stopped successfully")
         except Exception as e:
             logger.error(f"Error stopping worker pools: {e}")
 

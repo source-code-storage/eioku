@@ -272,17 +272,37 @@ class WorkerPool:
 
     def _get_worker_factory(self) -> Callable[[], TaskWorker]:
         """Get worker factory for task type."""
-        factories = {
-            TaskType.HASH: HashWorker,
-            TaskType.TRANSCRIPTION: TranscriptionWorker,
-            TaskType.SCENE_DETECTION: SceneDetectionWorker,
-            TaskType.OBJECT_DETECTION: ObjectDetectionWorker,
-            TaskType.FACE_DETECTION: TaskWorker,  # Generic for now
-            TaskType.TOPIC_EXTRACTION: TaskWorker,  # Generic for now
-            TaskType.EMBEDDING_GENERATION: TaskWorker,  # Generic for now
-            TaskType.THUMBNAIL_GENERATION: TaskWorker,  # Generic for now
-        }
-        return factories.get(self.config.task_type, TaskWorker)
+        if self.config.task_type == TaskType.HASH:
+            from .file_hash_service import FileHashService
+
+            hash_service = FileHashService()
+            return lambda: HashWorker(hash_service=hash_service)
+        elif self.config.task_type == TaskType.TRANSCRIPTION:
+            from ..database.connection import get_db
+            from ..repositories.transcription_repository import (
+                SqlTranscriptionRepository,
+            )
+            from .audio_extraction_service import AudioExtractionService
+            from .transcription_task_handler import TranscriptionTaskHandler
+            from .whisper_transcription_service import WhisperTranscriptionService
+
+            # Create transcription handler with dependencies
+            def create_transcription_worker():
+                session = next(get_db())
+                transcription_repo = SqlTranscriptionRepository(session)
+                audio_service = AudioExtractionService()
+                whisper_service = WhisperTranscriptionService()
+                transcription_handler = TranscriptionTaskHandler(
+                    transcription_repository=transcription_repo,
+                    audio_service=audio_service,
+                    whisper_service=whisper_service,
+                )
+                return TranscriptionWorker(transcription_handler=transcription_handler)
+
+            return create_transcription_worker
+        else:
+            # Generic workers for other task types
+            return TaskWorker
 
 
 class WorkerPoolManager:
