@@ -212,3 +212,23 @@ class Topic:
     def is_highly_relevant(self, threshold: float = 0.8) -> bool:
         """Check if topic has high relevance score."""
         return self.relevance_score >= threshold
+
+
+class PathConfig:
+    """Domain model for PathConfig - pure business object."""
+
+    def __init__(
+        self,
+        path_id: str,
+        path: str,
+        recursive: bool = True,
+        added_at: datetime | None = None,
+    ):
+        self.path_id = path_id
+        self.path = path
+        self.recursive = recursive
+        self.added_at = added_at or datetime.utcnow()
+
+    def is_recursive(self) -> bool:
+        """Check if path should be scanned recursively."""
+        return self.recursive

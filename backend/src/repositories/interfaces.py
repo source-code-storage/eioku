@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from ..domain.models import Face, Object, Scene, Topic, Transcription, Video
+from ..domain.models import Face, Object, PathConfig, Scene, Topic, Transcription, Video
 
 
 class VideoRepository(ABC):
@@ -156,4 +156,28 @@ class TopicRepository(ABC):
     @abstractmethod
     def delete_by_video_id(self, video_id: str) -> bool:
         """Delete all topics for a video."""
+        pass
+
+
+class PathConfigRepository(ABC):
+    """Abstract repository interface for PathConfig persistence."""
+
+    @abstractmethod
+    def save(self, path_config: PathConfig) -> PathConfig:
+        """Save path config to persistence layer."""
+        pass
+
+    @abstractmethod
+    def find_all(self) -> list[PathConfig]:
+        """Find all configured paths."""
+        pass
+
+    @abstractmethod
+    def find_by_path(self, path: str) -> PathConfig | None:
+        """Find path config by path."""
+        pass
+
+    @abstractmethod
+    def delete_by_path(self, path: str) -> bool:
+        """Delete path config by path."""
         pass
