@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from ..domain.models import Video
+from ..domain.models import Transcription, Video
 
 
 class VideoRepository(ABC):
@@ -29,4 +29,30 @@ class VideoRepository(ABC):
     @abstractmethod
     def delete(self, video_id: str) -> bool:
         """Delete video by ID."""
+        pass
+
+
+class TranscriptionRepository(ABC):
+    """Abstract repository interface for Transcription persistence."""
+
+    @abstractmethod
+    def save(self, transcription: Transcription) -> Transcription:
+        """Save transcription to persistence layer."""
+        pass
+
+    @abstractmethod
+    def find_by_video_id(self, video_id: str) -> list[Transcription]:
+        """Find all transcriptions for a video."""
+        pass
+
+    @abstractmethod
+    def find_by_time_range(
+        self, video_id: str, start: float, end: float
+    ) -> list[Transcription]:
+        """Find transcriptions within time range."""
+        pass
+
+    @abstractmethod
+    def delete_by_video_id(self, video_id: str) -> bool:
+        """Delete all transcriptions for a video."""
         pass
