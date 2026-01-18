@@ -14,6 +14,7 @@ from src.database.migrations import run_migrations
 from src.repositories.path_config_repository import SQLAlchemyPathConfigRepository
 from src.services.config_loader import ConfigLoader
 from src.services.path_config_manager import PathConfigManager
+from src.services.video_discovery_service import VideoDiscoveryService
 
 # Configure logging for gunicorn + uvicorn compatibility
 gunicorn_error_logger = logging.getLogger("gunicorn.error")
@@ -62,6 +63,16 @@ async def lifespan(app: FastAPI):
             video_repo = SqlVideoRepository(session)
             task_repo = SQLAlchemyTaskRepository(session)
             orchestrator = TaskOrchestrator(task_repo, video_repo)
+
+            # Auto-discover videos on startup
+            logger.info("Running auto-discovery on startup...")
+
+            path_config_repo = SQLAlchemyPathConfigRepository(session)
+            path_manager = PathConfigManager(path_config_repo)
+            discovery_service = VideoDiscoveryService(video_repo, path_manager)
+
+            discovered_videos = discovery_service.discover_videos()
+            logger.info(f"Auto-discovery found {len(discovered_videos)} videos")
 
             # Create and start worker pool manager
             pool_manager = WorkerPoolManager(orchestrator)
