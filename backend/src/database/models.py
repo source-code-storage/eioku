@@ -53,3 +53,15 @@ class Object(Base):
     timestamps = Column(JSON, nullable=False)      # Timestamps where object appears
     bounding_boxes = Column(JSON, nullable=False)  # Bounding box coordinates
     created_at = Column(DateTime, server_default=func.now())
+
+
+class Face(Base):
+    __tablename__ = "faces"
+
+    face_id = Column(String, primary_key=True)
+    video_id = Column(String, ForeignKey("videos.video_id"), nullable=False, index=True)
+    person_id = Column(String)                     # Person identifier for clustering
+    timestamps = Column(JSON, nullable=False)      # Timestamps where face appears
+    bounding_boxes = Column(JSON, nullable=False)  # Bounding box coordinates
+    confidence = Column(Float)                     # Face detection confidence
+    created_at = Column(DateTime, server_default=func.now())
