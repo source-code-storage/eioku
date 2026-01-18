@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from ..domain.models import Transcription, Video
+from ..domain.models import Scene, Transcription, Video
 
 
 class VideoRepository(ABC):
@@ -55,4 +55,28 @@ class TranscriptionRepository(ABC):
     @abstractmethod
     def delete_by_video_id(self, video_id: str) -> bool:
         """Delete all transcriptions for a video."""
+        pass
+
+
+class SceneRepository(ABC):
+    """Abstract repository interface for Scene persistence."""
+
+    @abstractmethod
+    def save(self, scene: Scene) -> Scene:
+        """Save scene to persistence layer."""
+        pass
+
+    @abstractmethod
+    def find_by_video_id(self, video_id: str) -> list[Scene]:
+        """Find all scenes for a video."""
+        pass
+
+    @abstractmethod
+    def find_by_scene_number(self, video_id: str, scene_number: int) -> Scene | None:
+        """Find scene by number within a video."""
+        pass
+
+    @abstractmethod
+    def delete_by_video_id(self, video_id: str) -> bool:
+        """Delete all scenes for a video."""
         pass
