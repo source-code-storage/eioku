@@ -104,3 +104,35 @@ class Scene:
     def has_thumbnail(self) -> bool:
         """Check if scene has a thumbnail."""
         return self.thumbnail_path is not None
+
+
+class Object:
+    """Domain model for Object - pure business object."""
+
+    def __init__(
+        self,
+        object_id: str,
+        video_id: str,
+        label: str,
+        timestamps: list[float],
+        bounding_boxes: list[dict],
+        created_at: datetime | None = None,
+    ):
+        self.object_id = object_id
+        self.video_id = video_id
+        self.label = label
+        self.timestamps = timestamps
+        self.bounding_boxes = bounding_boxes
+        self.created_at = created_at
+
+    def get_occurrence_count(self) -> int:
+        """Get number of times object appears in video."""
+        return len(self.timestamps)
+
+    def get_first_appearance(self) -> float | None:
+        """Get timestamp of first appearance."""
+        return min(self.timestamps) if self.timestamps else None
+
+    def get_last_appearance(self) -> float | None:
+        """Get timestamp of last appearance."""
+        return max(self.timestamps) if self.timestamps else None
