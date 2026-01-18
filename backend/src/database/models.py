@@ -30,3 +30,15 @@ class Transcription(Base):
     confidence = Column(Float)             # Transcription confidence score
     speaker = Column(String)               # Speaker ID for multi-speaker audio
     created_at = Column(DateTime, server_default=func.now())
+
+
+class Scene(Base):
+    __tablename__ = "scenes"
+
+    scene_id = Column(String, primary_key=True)
+    video_id = Column(String, ForeignKey("videos.video_id"), nullable=False, index=True)
+    scene = Column(Integer, nullable=False)  # Scene number/index
+    start = Column(Float, nullable=False)    # Start time in seconds
+    end = Column(Float, nullable=False)      # End time in seconds
+    thumbnail_path = Column(String)          # Path to scene thumbnail image
+    created_at = Column(DateTime, server_default=func.now())
