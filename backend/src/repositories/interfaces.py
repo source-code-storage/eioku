@@ -1,6 +1,15 @@
 from abc import ABC, abstractmethod
 
-from ..domain.models import Face, Object, PathConfig, Scene, Topic, Transcription, Video
+from ..domain.models import (
+    Face,
+    Object,
+    PathConfig,
+    Scene,
+    Task,
+    Topic,
+    Transcription,
+    Video,
+)
 
 
 class VideoRepository(ABC):
@@ -180,4 +189,33 @@ class PathConfigRepository(ABC):
     @abstractmethod
     def delete_by_path(self, path: str) -> bool:
         """Delete path config by path."""
+        pass
+
+
+class TaskRepository(ABC):
+    """Abstract repository interface for Task persistence."""
+
+    @abstractmethod
+    def save(self, task: Task) -> Task:
+        """Save task to persistence layer."""
+        pass
+
+    @abstractmethod
+    def find_by_video_id(self, video_id: str) -> list[Task]:
+        """Find all tasks for a video."""
+        pass
+
+    @abstractmethod
+    def find_by_status(self, status: str) -> list[Task]:
+        """Find tasks by status."""
+        pass
+
+    @abstractmethod
+    def find_by_task_type(self, task_type: str) -> list[Task]:
+        """Find tasks by type."""
+        pass
+
+    @abstractmethod
+    def delete_by_video_id(self, video_id: str) -> bool:
+        """Delete all tasks for a video."""
         pass
