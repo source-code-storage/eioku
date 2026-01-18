@@ -1,9 +1,12 @@
 import argparse
+import logging
 import sys
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.logger import logger
 
+from src.api.path_controller_full import router as path_router
 from src.api.video_controller import router as video_router
 from src.database.connection import get_db
 from src.database.migrations import run_migrations
@@ -11,11 +14,25 @@ from src.repositories.path_config_repository import SQLAlchemyPathConfigReposito
 from src.services.config_loader import ConfigLoader
 from src.services.path_config_manager import PathConfigManager
 
+# Configure logging for gunicorn + uvicorn compatibility
+gunicorn_error_logger = logging.getLogger("gunicorn.error")
+gunicorn_logger = logging.getLogger("gunicorn")
+uvicorn_access_logger = logging.getLogger("uvicorn.access")
+uvicorn_access_logger.handlers = gunicorn_error_logger.handlers
+
+logger.handlers = gunicorn_error_logger.handlers
+
+if __name__ != "__main__":
+    logger.setLevel(gunicorn_logger.level)
+else:
+    logger.setLevel(logging.DEBUG)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Handle application lifespan events."""
     # Startup
+    logger.info("FastAPI starting up...")
     run_migrations()
 
     # Load initial configuration
@@ -27,12 +44,15 @@ async def lifespan(app: FastAPI):
 
         # Use config path from app state if available
         config_path = getattr(app.state, "config_path", None)
+        logger.info(f"Loading config from: {config_path}")
         config_loader.load_initial_config(config_path)
     finally:
         session.close()
 
+    logger.info("FastAPI startup complete")
     yield
     # Shutdown (nothing to do for now)
+    logger.info("FastAPI shutting down")
 
 
 def create_app(config_path: str | None = None) -> FastAPI:
@@ -41,6 +61,8 @@ def create_app(config_path: str | None = None) -> FastAPI:
         title="Eioku - Semantic Video Search API",
         description="API for semantic video search and processing",
         version="1.0.0",
+        openapi_version="3.0.2",
+        root_path="/api",  # Tell FastAPI about the reverse proxy prefix
         lifespan=lifespan,
     )
 
@@ -49,7 +71,11 @@ def create_app(config_path: str | None = None) -> FastAPI:
         app.state.config_path = config_path
 
     # Include routers
+    logger.info("Including video router...")
     app.include_router(video_router, prefix="/v1")
+    logger.info("Including path router...")
+    app.include_router(path_router, prefix="/v1")
+    logger.info("Routers included successfully")
 
     return app
 

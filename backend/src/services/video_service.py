@@ -51,3 +51,12 @@ class VideoService:
     def get_pending_videos(self) -> list[Video]:
         """Get videos pending processing - used by orchestrator."""
         return self.video_repository.find_by_status("pending")
+
+    def get_all_videos(self) -> list[Video]:
+        """Get all videos regardless of status."""
+        # Get videos by common statuses
+        all_videos = []
+        for status in ["pending", "processing", "completed", "failed", "discovered"]:
+            videos = self.video_repository.find_by_status(status)
+            all_videos.extend(videos)
+        return all_videos

@@ -64,8 +64,8 @@ async def list_videos(
     if status:
         videos = service.get_videos_by_status(status)
     else:
-        # For now, just return pending videos as example
-        videos = service.get_pending_videos()
+        # Return all videos
+        videos = service.get_all_videos()
 
     return [VideoResponseSchema.model_validate(video.__dict__) for video in videos]
 

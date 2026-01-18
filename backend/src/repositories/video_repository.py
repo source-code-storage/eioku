@@ -1,8 +1,12 @@
+import logging
+
 from sqlalchemy.orm import Session
 
 from ..database.models import Video as VideoEntity
 from ..domain.models import Video
 from .interfaces import VideoRepository
+
+logger = logging.getLogger(__name__)
 
 
 class SqlVideoRepository(VideoRepository):
@@ -13,30 +17,45 @@ class SqlVideoRepository(VideoRepository):
 
     def save(self, video: Video) -> Video:
         """Save video to database."""
-        # Convert domain model to entity
-        entity = self._to_entity(video)
+        logger.debug(f"VideoRepository.save() called for video: {video.video_id}")
+        try:
+            # Convert domain model to entity
+            entity = self._to_entity(video)
+            logger.debug(f"Converted to entity: {entity.video_id}")
 
-        # Check if exists (update) or new (create)
-        existing = (
-            self.session.query(VideoEntity)
-            .filter(VideoEntity.video_id == video.video_id)
-            .first()
-        )
+            # Check if exists (update) or new (create)
+            existing = (
+                self.session.query(VideoEntity)
+                .filter(VideoEntity.video_id == video.video_id)
+                .first()
+            )
 
-        if existing:
-            # Update existing
-            for key, value in entity.__dict__.items():
-                if not key.startswith("_") and value is not None:
-                    setattr(existing, key, value)
-            self.session.commit()
-            self.session.refresh(existing)
-            return self._to_domain(existing)
-        else:
-            # Create new
-            self.session.add(entity)
-            self.session.commit()
-            self.session.refresh(entity)
-            return self._to_domain(entity)
+            if existing:
+                logger.debug(f"Updating existing video: {existing.video_id}")
+                # Update existing
+                for key, value in entity.__dict__.items():
+                    if not key.startswith("_") and value is not None:
+                        setattr(existing, key, value)
+                self.session.commit()
+                logger.debug("Update committed successfully")
+                self.session.refresh(existing)
+                return self._to_domain(existing)
+            else:
+                logger.debug(f"Creating new video: {entity.video_id}")
+                # Create new
+                self.session.add(entity)
+                self.session.commit()
+                logger.debug("New video committed successfully")
+                self.session.refresh(entity)
+                result = self._to_domain(entity)
+                logger.debug(f"Returning saved video: {result.video_id}")
+                return result
+        except Exception as e:
+            logger.error(f"Error in VideoRepository.save(): {e}")
+            import traceback
+
+            traceback.print_exc()
+            raise
 
     def find_by_id(self, video_id: str) -> Video | None:
         """Find video by ID."""
