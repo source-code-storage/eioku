@@ -1,4 +1,4 @@
-from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Column, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.sql import func
 
 from .connection import Base
@@ -41,4 +41,15 @@ class Scene(Base):
     start = Column(Float, nullable=False)    # Start time in seconds
     end = Column(Float, nullable=False)      # End time in seconds
     thumbnail_path = Column(String)          # Path to scene thumbnail image
+    created_at = Column(DateTime, server_default=func.now())
+
+
+class Object(Base):
+    __tablename__ = "objects"
+
+    object_id = Column(String, primary_key=True)
+    video_id = Column(String, ForeignKey("videos.video_id"), nullable=False, index=True)
+    label = Column(String, nullable=False, index=True)  # Object class label
+    timestamps = Column(JSON, nullable=False)      # Timestamps where object appears
+    bounding_boxes = Column(JSON, nullable=False)  # Bounding box coordinates
     created_at = Column(DateTime, server_default=func.now())
