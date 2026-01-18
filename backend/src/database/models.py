@@ -1,4 +1,4 @@
-from sqlalchemy import Column, DateTime, Float, Integer, String
+from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.sql import func
 
 from .connection import Base
@@ -17,3 +17,16 @@ class Video(Base):
     status = Column(String, nullable=False, default="pending", index=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class Transcription(Base):
+    __tablename__ = "transcriptions"
+
+    segment_id = Column(String, primary_key=True)
+    video_id = Column(String, ForeignKey("videos.video_id"), nullable=False, index=True)
+    text = Column(Text, nullable=False)
+    start = Column(Float, nullable=False)  # Start time in seconds
+    end = Column(Float, nullable=False)    # End time in seconds
+    confidence = Column(Float)             # Transcription confidence score
+    speaker = Column(String)               # Speaker ID for multi-speaker audio
+    created_at = Column(DateTime, server_default=func.now())
