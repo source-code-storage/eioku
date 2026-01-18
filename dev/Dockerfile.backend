@@ -1,0 +1,19 @@
+FROM python:3.10-slim
+
+# Install Poetry
+RUN pip install poetry
+
+# Configure Poetry
+ENV POETRY_NO_INTERACTION=1 \
+    POETRY_VENV_IN_PROJECT=1 \
+    POETRY_CACHE_DIR=/tmp/poetry_cache
+
+WORKDIR /app
+
+# Copy Poetry files
+COPY pyproject.toml ./
+
+# Install dependencies only (not the project itself)
+RUN poetry install --no-root && rm -rf $POETRY_CACHE_DIR
+
+# The source code will be mounted as a volume
