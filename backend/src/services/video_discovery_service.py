@@ -1,10 +1,14 @@
 """Video file discovery service."""
 
+import logging
 from pathlib import Path
 
 from ..domain.models import PathConfig, Video
 from ..repositories.interfaces import VideoRepository
 from .path_config_manager import PathConfigManager
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 
 class VideoDiscoveryService:
@@ -22,13 +26,18 @@ class VideoDiscoveryService:
 
     def discover_videos(self) -> list[Video]:
         """Discover all video files in configured paths."""
+        logger.info("Starting discovery...")
         discovered_videos = []
         path_configs = self.path_config_manager.list_paths()
+        logger.info(f"Found {len(path_configs)} configured paths")
 
         for path_config in path_configs:
+            logger.info(f"Scanning path: {path_config.path}")
             videos = self._scan_path(path_config)
+            logger.info(f"Found {len(videos)} videos in {path_config.path}")
             discovered_videos.extend(videos)
 
+        logger.info(f"Total discovered videos: {len(discovered_videos)}")
         return discovered_videos
 
     def _scan_path(self, path_config: PathConfig) -> list[Video]:
@@ -63,13 +72,19 @@ class VideoDiscoveryService:
     def _create_video_from_file(self, file_path: Path) -> Video | None:
         """Create Video domain object from file path."""
         try:
+            logger.debug(f"Creating video from file: {file_path}")
+
             # Check if video already exists in database
             existing = self.video_repository.find_by_path(str(file_path))
             if existing:
+                logger.debug(f"Video already exists: {existing.video_id}")
                 return existing
 
             # Get file stats
             stat = file_path.stat()
+            logger.debug(
+                f"File stats - size: {stat.st_size}, modified: {stat.st_mtime}"
+            )
 
             # Create new video
             import uuid
@@ -80,20 +95,32 @@ class VideoDiscoveryService:
                 file_path=str(file_path),
                 filename=file_path.name,
                 last_modified=datetime.fromtimestamp(stat.st_mtime),
-                file_size=stat.st_size,
                 status="discovered",
+                file_size=stat.st_size,
             )
+            logger.debug(f"Created video object: {video.video_id}")
 
-            return self.video_repository.save(video)
+            # Save to database
+            logger.debug("Attempting to save video to database...")
+            saved_video = self.video_repository.save(video)
+            logger.info(f"Video saved successfully: {saved_video.video_id}")
+            return saved_video
 
-        except (OSError, PermissionError):
-            # Skip files we can't access
+        except Exception as e:
+            # Log the error for debugging
+            logger.error(f"Error creating video from {file_path}: {e}")
+            import traceback
+
+            traceback.print_exc()
             return None
 
     def validate_existing_videos(self) -> list[Video]:
         """Validate that existing videos still exist on filesystem."""
         missing_videos = []
-        all_videos = self.video_repository.find_by_status("completed")
+        # Check all videos that have been discovered or completed
+        all_videos = []
+        all_videos.extend(self.video_repository.find_by_status("discovered"))
+        all_videos.extend(self.video_repository.find_by_status("completed"))
 
         for video in all_videos:
             if not Path(video.file_path).exists():
