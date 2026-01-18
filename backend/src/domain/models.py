@@ -136,3 +136,41 @@ class Object:
     def get_last_appearance(self) -> float | None:
         """Get timestamp of last appearance."""
         return max(self.timestamps) if self.timestamps else None
+
+
+class Face:
+    """Domain model for Face - pure business object."""
+
+    def __init__(
+        self,
+        face_id: str,
+        video_id: str,
+        person_id: str | None,
+        timestamps: list[float],
+        bounding_boxes: list[dict],
+        confidence: float,
+        created_at: datetime | None = None,
+    ):
+        self.face_id = face_id
+        self.video_id = video_id
+        self.person_id = person_id
+        self.timestamps = timestamps
+        self.bounding_boxes = bounding_boxes
+        self.confidence = confidence
+        self.created_at = created_at
+
+    def get_occurrence_count(self) -> int:
+        """Get number of times face appears in video."""
+        return len(self.timestamps)
+
+    def get_first_appearance(self) -> float | None:
+        """Get timestamp of first appearance."""
+        return min(self.timestamps) if self.timestamps else None
+
+    def get_last_appearance(self) -> float | None:
+        """Get timestamp of last appearance."""
+        return max(self.timestamps) if self.timestamps else None
+
+    def is_identified(self) -> bool:
+        """Check if face has been identified with a person ID."""
+        return self.person_id is not None
