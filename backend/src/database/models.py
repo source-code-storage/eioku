@@ -77,3 +77,12 @@ class Topic(Base):
     relevance_score = Column(Float, nullable=False)  # Topic relevance score
     timestamps = Column(JSON, nullable=False)      # Timestamps where topic appears
     created_at = Column(DateTime, server_default=func.now())
+
+
+class PathConfig(Base):
+    __tablename__ = "path_configs"
+
+    path_id = Column(String, primary_key=True)
+    path = Column(String, nullable=False, unique=True)  # File system path
+    recursive = Column(String, nullable=False, default="true")  # Scan recursively
+    added_at = Column(DateTime, server_default=func.now())
