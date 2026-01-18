@@ -26,6 +26,13 @@
 - Highlight any potential impacts or dependencies
 - Provide rollback options when possible
 
+### Iterative Implementation
+- **Work iteratively with as many commits and tests as possible**
+- **Each commit should be testable unless explicitly stated otherwise**
+- **One schema per commit** - Database changes in small, focused commits
+- **Test-driven approach** - Write tests for each incremental change
+- **Continuous validation** - Ensure each step works before proceeding
+
 ## Development Loop
 
 1. **Identify** the smallest meaningful change
