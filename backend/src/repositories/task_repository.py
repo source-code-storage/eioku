@@ -133,3 +133,29 @@ class SQLAlchemyTaskRepository(TaskRepository):
         self.session.refresh(entity)
 
         return self._entity_to_domain(entity)
+
+    def atomic_dequeue_pending_task(self, task_type: str) -> Task | None:
+        """Atomically dequeue a pending task using SELECT FOR UPDATE.
+
+        This ensures only one worker can claim a task at a time.
+        """
+        # Use SELECT FOR UPDATE SKIP LOCKED to atomically claim a task
+        # SKIP LOCKED means if a row is locked, skip it and try the next one
+        entity = (
+            self.session.query(TaskEntity)
+            .filter(TaskEntity.task_type == task_type)
+            .filter(TaskEntity.status == "pending")
+            .order_by(TaskEntity.priority.desc(), TaskEntity.created_at.asc())
+            .with_for_update(skip_locked=True)
+            .first()
+        )
+
+        if not entity:
+            return None
+
+        # Mark as running immediately within the same transaction
+        entity.status = "running"
+        entity.started_at = datetime.utcnow()
+        self.session.commit()
+
+        return self._entity_to_domain(entity)
