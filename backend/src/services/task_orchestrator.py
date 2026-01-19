@@ -1,11 +1,11 @@
 """Task orchestrator for managing video processing tasks."""
 
-import logging
 import uuid
 from datetime import datetime
 
 from ..domain.models import Task, Video
 from ..repositories.interfaces import TaskRepository, VideoRepository
+from ..utils.print_logger import get_logger
 from .task_orchestration import (
     TaskDependencyManager,
     TaskPriority,
@@ -14,7 +14,7 @@ from .task_orchestration import (
     is_video_ready_for_task_type,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TaskOrchestrator:
