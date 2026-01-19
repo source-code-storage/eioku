@@ -1,6 +1,5 @@
 """Task orchestration system for video processing."""
 
-import logging
 import threading
 from dataclasses import dataclass
 from datetime import datetime
@@ -8,8 +7,9 @@ from enum import Enum
 from queue import PriorityQueue
 
 from ..domain.models import Task, Video
+from ..utils.print_logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TaskType(Enum):
@@ -86,11 +86,20 @@ class TaskQueues:
         with self._locks[task_type]:
             if not self._queues[task_type].empty():
                 queue_item = self._queues[task_type].get()
-                logger.info(
-                    f"Dequeued {task_type.value} task for video "
-                    f"{queue_item.task.video_id}"
-                )
-                return queue_item.task
+                task = queue_item.task
+
+                # Check if task is still pending (not already picked up)
+                if task.status == "pending":
+                    logger.info(
+                        f"Dequeued {task_type.value} task for video " f"{task.video_id}"
+                    )
+                    return task
+                else:
+                    # Task already being processed, skip it
+                    logger.debug(
+                        f"Skipping {task_type.value} task {task.task_id} - "
+                        f"status is {task.status}"
+                    )
         return None
 
     def get_queue_size(self, task_type: TaskType) -> int:
