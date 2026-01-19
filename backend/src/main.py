@@ -4,7 +4,7 @@ import sys
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from fastapi.logger import logger
+from fastapi.logger import logger as fastapi_logger
 
 from src.api.path_controller_full import router as path_router
 from src.api.task_routes import router as task_router
@@ -15,6 +15,7 @@ from src.repositories.path_config_repository import SQLAlchemyPathConfigReposito
 from src.services.config_loader import ConfigLoader
 from src.services.path_config_manager import PathConfigManager
 from src.services.video_discovery_service import VideoDiscoveryService
+from src.utils.print_logger import get_logger
 
 # Configure logging for gunicorn + uvicorn compatibility
 gunicorn_error_logger = logging.getLogger("gunicorn.error")
@@ -22,37 +23,40 @@ gunicorn_logger = logging.getLogger("gunicorn")
 uvicorn_access_logger = logging.getLogger("uvicorn.access")
 uvicorn_access_logger.handlers = gunicorn_error_logger.handlers
 
-logger.handlers = gunicorn_error_logger.handlers
+fastapi_logger.handlers = gunicorn_error_logger.handlers
 
 if __name__ != "__main__":
-    logger.setLevel(gunicorn_logger.level)
+    fastapi_logger.setLevel(gunicorn_logger.level)
 else:
-    logger.setLevel(logging.DEBUG)
+    fastapi_logger.setLevel(logging.DEBUG)
+
+# Use print logger for startup
+logger = get_logger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Handle application lifespan events."""
-    print("🚀 LIFESPAN STARTUP", flush=True)
+    logger.info("LIFESPAN STARTUP")
 
-    print("1️⃣ Running migrations...", flush=True)
+    logger.info("1️⃣ Running migrations...")
     run_migrations()
-    print("✅ Migrations done", flush=True)
+    logger.info("✅ Migrations done")
 
-    print("2️⃣ Getting DB session...", flush=True)
+    logger.info("2️⃣ Getting DB session...")
     session = next(get_db())
-    print("✅ DB session obtained", flush=True)
+    logger.info("✅ DB session obtained")
 
     try:
-        print("3️⃣ Loading config...", flush=True)
+        logger.info("3️⃣ Loading config...")
         path_repo = SQLAlchemyPathConfigRepository(session)
         path_manager = PathConfigManager(path_repo)
         config_loader = ConfigLoader(path_manager)
         config_path = getattr(app.state, "config_path", None)
         config_loader.load_initial_config(config_path)
-        print("✅ Config loaded", flush=True)
+        logger.info("✅ Config loaded")
 
-        print("4️⃣ Importing services...", flush=True)
+        logger.info("4️⃣ Importing services...")
         from src.repositories.task_repository import SQLAlchemyTaskRepository
         from src.repositories.video_repository import SqlVideoRepository
         from src.services.task_orchestration import TaskType
@@ -63,63 +67,79 @@ async def lifespan(app: FastAPI):
             WorkerPoolManager,
         )
 
-        print("✅ Services imported", flush=True)
+        logger.info("✅ Services imported")
 
-        print("5️⃣ Creating repositories...", flush=True)
+        logger.info("5️⃣ Creating repositories...")
         video_repo = SqlVideoRepository(session)
         task_repo = SQLAlchemyTaskRepository(session)
         orchestrator = TaskOrchestrator(task_repo, video_repo)
-        print("✅ Repositories created", flush=True)
+        logger.info("✅ Repositories created")
 
-        print("6️⃣ Running auto-discovery...", flush=True)
+        logger.info("6️⃣ Running auto-discovery...")
         discovery_service = VideoDiscoveryService(path_manager, video_repo)
         discovered_videos = discovery_service.discover_videos()
-        print(f"✅ Discovered {len(discovered_videos)} videos", flush=True)
+        logger.info(f"✅ Discovered {len(discovered_videos)} videos")
 
-        print("7️⃣ Creating tasks for discovered videos...", flush=True)
+        logger.info("7️⃣ Creating tasks for discovered videos...")
         tasks_created = orchestrator.process_discovered_videos()
-        print(f"✅ Created {tasks_created} tasks for discovered videos", flush=True)
+        logger.info(f"✅ Created {tasks_created} tasks for discovered videos")
 
-        print("8️⃣ Creating worker pool manager...", flush=True)
+        logger.info("8️⃣ Loading pending tasks from database...")
+        # Load all pending tasks and enqueue them
+        pending_tasks = task_repo.find_by_status("pending")
+        for task in pending_tasks:
+            task_type = TaskType(task.task_type)
+            priority = orchestrator._get_task_priority(task_type)
+            orchestrator.task_queues.enqueue(task, priority)
+        logger.info(f"✅ Loaded {len(pending_tasks)} pending tasks into queues")
+
+        logger.info("9️⃣ Creating worker pool manager...")
         pool_manager = WorkerPoolManager(orchestrator)
-        print("✅ Pool manager created", flush=True)
+        logger.info("✅ Pool manager created")
 
-        print("9️⃣ Adding hash worker pool...", flush=True)
+        logger.info("🔟 Adding hash worker pool...")
         hash_config = WorkerConfig(TaskType.HASH, 2, ResourceType.CPU, 1)
         pool_manager.add_worker_pool(hash_config)
-        print("✅ Hash pool added", flush=True)
+        logger.info("✅ Hash pool added")
 
-        print("🔟 Adding transcription worker pool...", flush=True)
+        logger.info("1️⃣1️⃣ Adding transcription worker pool...")
         transcription_config = WorkerConfig(
             TaskType.TRANSCRIPTION, 1, ResourceType.CPU, 1
         )
         pool_manager.add_worker_pool(transcription_config)
-        print("✅ Transcription pool added", flush=True)
+        logger.info("✅ Transcription pool added")
 
-        print("1️⃣1️⃣ Starting all worker pools...", flush=True)
+        logger.info("1️⃣2️⃣ Adding scene detection worker pool...")
+        scene_detection_config = WorkerConfig(
+            TaskType.SCENE_DETECTION, 1, ResourceType.CPU, 1
+        )
+        pool_manager.add_worker_pool(scene_detection_config)
+        logger.info("✅ Scene detection pool added")
+
+        logger.info("1️⃣3️⃣ Starting all worker pools...")
         pool_manager.start_all()
-        print("✅ Worker pools started", flush=True)
+        logger.info("✅ Worker pools started")
 
-        print("🏁 Storing in app state...", flush=True)
+        logger.info("🏁 Storing in app state...")
         app.state.pool_manager = pool_manager
         app.state.orchestrator = orchestrator
-        print("✅ STARTUP COMPLETE", flush=True)
+        logger.info("✅ STARTUP COMPLETE")
 
     except Exception as e:
-        print(f"❌ Error at step: {e}", flush=True)
+        logger.error(f"❌ Error during startup: {e}")
         import traceback
 
         traceback.print_exc()
-
-    finally:
-        session.close()
+        raise  # Re-raise to prevent app from starting
 
     yield
 
     # Shutdown
+    logger.info("🛑 Shutting down...")
     if hasattr(app.state, "pool_manager"):
         app.state.pool_manager.stop_all()
-    print("✅ SHUTDOWN COMPLETE", flush=True)
+    session.close()
+    logger.info("✅ SHUTDOWN COMPLETE")
 
 
 def create_app(config_path: str | None = None) -> FastAPI:
@@ -138,13 +158,13 @@ def create_app(config_path: str | None = None) -> FastAPI:
         app.state.config_path = config_path
 
     # Include routers
-    logger.info("Including video router...")
+    fastapi_logger.info("Including video router...")
     app.include_router(video_router, prefix="/v1")
-    logger.info("Including path router...")
+    fastapi_logger.info("Including path router...")
     app.include_router(path_router, prefix="/v1")
-    logger.info("Including task router...")
+    fastapi_logger.info("Including task router...")
     app.include_router(task_router, prefix="/v1")
-    logger.info("Routers included successfully")
+    fastapi_logger.info("Routers included successfully")
 
     return app
 
