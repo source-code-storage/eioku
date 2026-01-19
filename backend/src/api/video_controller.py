@@ -137,3 +137,47 @@ async def get_video_transcription(video_id: str, session: Session = Depends(get_
         "segment_count": len(segments),
         "created_at": segments[0].created_at if segments else None,
     }
+
+
+@router.get("/{video_id}/scenes")
+async def get_video_scenes(video_id: str, session: Session = Depends(get_db)):
+    """Get detected scenes for a video."""
+    from ..repositories.scene_repository import SqlSceneRepository
+
+    scene_repo = SqlSceneRepository(session)
+    scenes = scene_repo.find_by_video_id(video_id)
+
+    if not scenes:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Scenes not found for this video",
+        )
+
+    # Convert scenes to dict format
+    scenes_data = [
+        {
+            "scene_id": scene.scene_id,
+            "scene": scene.scene,
+            "start": scene.start,
+            "end": scene.end,
+            "duration": scene.get_duration(),
+            "thumbnail_path": scene.thumbnail_path,
+            "created_at": scene.created_at,
+        }
+        for scene in scenes
+    ]
+
+    # Calculate statistics
+    durations = [scene.get_duration() for scene in scenes]
+    total_duration = scenes[-1].end if scenes else 0.0
+
+    return {
+        "video_id": video_id,
+        "scenes": scenes_data,
+        "scene_count": len(scenes),
+        "total_duration": total_duration,
+        "avg_scene_length": sum(durations) / len(durations) if durations else 0.0,
+        "min_scene_length": min(durations) if durations else 0.0,
+        "max_scene_length": max(durations) if durations else 0.0,
+        "created_at": scenes[0].created_at if scenes else None,
+    }
