@@ -8,7 +8,7 @@ from unittest.mock import Mock
 import pytest
 
 from src.domain.artifacts import ArtifactEnvelope
-from src.domain.models import Task, Video
+from src.domain.models import Face, Task, Video
 from src.domain.schema_registry import SchemaRegistry
 from src.services.face_detection_task_handler import FaceDetectionTaskHandler
 
@@ -28,32 +28,29 @@ class TestFaceDetectionTaskHandler:
     def mock_detection_service(self):
         """Create mock face detection service."""
         service = Mock()
-
-        # Mock service returns frame-level detections
-        service.detect_faces_in_video = Mock(
-            return_value=[
+        # Create a mock Face with bounding boxes
+        mock_face = Face(
+            face_id="face-1",
+            video_id="video-123",
+            person_id="person_001",
+            timestamps=[1.0, 2.0],
+            bounding_boxes=[
                 {
-                    "frame_number": 30,
+                    "frame": 30,
                     "timestamp": 1.0,
-                    "detections": [
-                        {
-                            "bbox": [100.0, 150.0, 200.0, 250.0],
-                            "confidence": 0.95,
-                        }
-                    ],
+                    "bbox": [100.0, 150.0, 200.0, 250.0],
+                    "confidence": 0.95,
                 },
                 {
-                    "frame_number": 60,
+                    "frame": 60,
                     "timestamp": 2.0,
-                    "detections": [
-                        {
-                            "bbox": [110.0, 160.0, 210.0, 260.0],
-                            "confidence": 0.92,
-                        }
-                    ],
+                    "bbox": [110.0, 160.0, 210.0, 260.0],
+                    "confidence": 0.92,
                 },
-            ]
+            ],
+            confidence=0.935,
         )
+        service.detect_faces_in_video = Mock(return_value=[mock_face])
         return service
 
     @pytest.fixture
@@ -93,16 +90,15 @@ class TestFaceDetectionTaskHandler:
         assert result is True
         mock_detection_service.detect_faces_in_video.assert_called_once_with(
             video_path="/path/to/video.mp4",
+            video_id="video-123",
             sample_rate=30,
         )
-        # Should call batch_create once with 2 artifacts
-        mock_artifact_repository.batch_create.assert_called_once()
-        call_args = mock_artifact_repository.batch_create.call_args
-        artifacts = call_args[0][0]  # First positional argument
-        assert len(artifacts) == 2
+        # Should create 2 artifacts (one per bounding box)
+        assert mock_artifact_repository.create.call_count == 2
 
         # Verify first artifact
-        artifact = artifacts[0]
+        first_call = mock_artifact_repository.create.call_args_list[0]
+        artifact = first_call[0][0]
         assert artifact.artifact_type == "face.detection"
         assert artifact.asset_id == "video-123"
         assert artifact.schema_version == 1
@@ -116,8 +112,7 @@ class TestFaceDetectionTaskHandler:
         assert "bounding_box" in payload
         assert "cluster_id" in payload
         assert "frame_number" in payload
-        # Cluster ID is auto-generated now, just verify it exists
-        assert payload["cluster_id"].startswith("face_")
+        assert payload["cluster_id"] == "person_001"
 
     def test_process_face_detection_task_generates_run_id(
         self, handler, mock_artifact_repository, mock_detection_service
@@ -142,12 +137,10 @@ class TestFaceDetectionTaskHandler:
 
         # Assert
         assert result is True
-        # Verify that batch_create was called with artifacts that have a run_id
-        mock_artifact_repository.batch_create.assert_called_once()
-        call_args = mock_artifact_repository.batch_create.call_args
-        artifacts = call_args[0][0]
-        assert len(artifacts) == 2
-        artifact = artifacts[0]
+        # Verify that artifacts were created with a run_id
+        assert mock_artifact_repository.create.call_count == 2
+        first_call = mock_artifact_repository.create.call_args_list[0]
+        artifact = first_call[0][0]
         assert artifact.run_id is not None
         assert len(artifact.run_id) > 0
 
