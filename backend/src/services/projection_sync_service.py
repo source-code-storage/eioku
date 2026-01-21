@@ -42,11 +42,11 @@ class ProjectionSyncService:
                 self._sync_object_labels(artifact)
             elif artifact.artifact_type == "face.detection":
                 self._sync_face_clusters(artifact)
-            elif artifact.artifact_type == "ocr.text":
-                self._sync_ocr_fts(artifact)
             # Add more artifact types here as they are implemented
             # elif artifact.artifact_type == "place.classification":
             #     self._sync_place_labels(artifact)
+            # elif artifact.artifact_type == "ocr.text":
+            #     self._sync_ocr_fts(artifact)
 
         except Exception as e:
             error_msg = (
@@ -260,38 +260,16 @@ class ProjectionSyncService:
         cluster_id = payload.get("cluster_id")
         confidence = payload.get("confidence", 0.0)
 
-        # Determine if we're using PostgreSQL or SQLite
-        bind = self.session.bind
-        is_postgresql = bind.dialect.name == "postgresql"
-
-        if is_postgresql:
-            # PostgreSQL syntax
-            sql = text(
-                """
-                INSERT INTO face_clusters
-                    (artifact_id, asset_id, cluster_id, confidence,
-                     start_ms, end_ms)
-                VALUES (:artifact_id, :asset_id, :cluster_id, :confidence,
-                        :start_ms, :end_ms)
-                ON CONFLICT (artifact_id) DO UPDATE
-                SET asset_id = EXCLUDED.asset_id,
-                    cluster_id = EXCLUDED.cluster_id,
-                    confidence = EXCLUDED.confidence,
-                    start_ms = EXCLUDED.start_ms,
-                    end_ms = EXCLUDED.end_ms
-                """
-            )
-        else:
-            # SQLite syntax
-            sql = text(
-                """
-                INSERT OR REPLACE INTO face_clusters
-                    (artifact_id, asset_id, cluster_id, confidence,
-                     start_ms, end_ms)
-                VALUES (:artifact_id, :asset_id, :cluster_id, :confidence,
-                        :start_ms, :end_ms)
-                """
-            )
+        # Insert into face_clusters projection table
+        sql = text(
+            """
+            INSERT OR REPLACE INTO face_clusters
+                (artifact_id, asset_id, cluster_id, confidence,
+                 start_ms, end_ms)
+            VALUES (:artifact_id, :asset_id, :cluster_id, :confidence,
+                    :start_ms, :end_ms)
+            """
+        )
 
         self.session.execute(
             sql,
@@ -305,83 +283,10 @@ class ProjectionSyncService:
             },
         )
 
+        self.session.commit()
+
         logger.debug(
             f"Synced face.detection artifact {artifact.artifact_id} "
             f"to face_clusters projection "
             f"(cluster_id={cluster_id})"
-        )
-
-    def _sync_ocr_fts(self, artifact: ArtifactEnvelope) -> None:
-        """
-        Synchronize ocr.text artifact to FTS projection.
-
-        Args:
-            artifact: The ocr.text artifact to synchronize
-        """
-        # Parse payload to extract text
-        payload = json.loads(artifact.payload_json)
-        ocr_text = payload.get("text", "")
-
-        # Determine if we're using PostgreSQL or SQLite
-        bind = self.session.bind
-        is_postgresql = bind.dialect.name == "postgresql"
-
-        if is_postgresql:
-            # PostgreSQL: Insert into ocr_fts table
-            # The tsvector column is automatically computed
-            sql = text(
-                """
-                INSERT INTO ocr_fts
-                    (artifact_id, asset_id, start_ms, end_ms, text)
-                VALUES (:artifact_id, :asset_id, :start_ms, :end_ms, :text)
-                ON CONFLICT (artifact_id) DO UPDATE
-                SET asset_id = EXCLUDED.asset_id,
-                    start_ms = EXCLUDED.start_ms,
-                    end_ms = EXCLUDED.end_ms,
-                    text = EXCLUDED.text
-                """
-            )
-        else:
-            # SQLite: Insert into FTS5 virtual table and metadata table
-            # First, insert into metadata table
-            metadata_sql = text(
-                """
-                INSERT OR REPLACE INTO ocr_fts_metadata
-                    (artifact_id, asset_id, start_ms, end_ms)
-                VALUES (:artifact_id, :asset_id, :start_ms, :end_ms)
-                """
-            )
-
-            self.session.execute(
-                metadata_sql,
-                {
-                    "artifact_id": artifact.artifact_id,
-                    "asset_id": artifact.asset_id,
-                    "start_ms": artifact.span_start_ms,
-                    "end_ms": artifact.span_end_ms,
-                },
-            )
-
-            # Then, insert into FTS5 table
-            sql = text(
-                """
-                INSERT INTO ocr_fts
-                    (artifact_id, asset_id, start_ms, end_ms, text)
-                VALUES (:artifact_id, :asset_id, :start_ms, :end_ms, :text)
-                """
-            )
-
-        self.session.execute(
-            sql,
-            {
-                "artifact_id": artifact.artifact_id,
-                "asset_id": artifact.asset_id,
-                "start_ms": artifact.span_start_ms,
-                "end_ms": artifact.span_end_ms,
-                "text": ocr_text,
-            },
-        )
-
-        logger.debug(
-            f"Synced ocr.text artifact {artifact.artifact_id} to FTS projection"
         )

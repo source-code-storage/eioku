@@ -56,11 +56,7 @@ class FaceDetectionTaskHandler:
             return "fast"
 
     def process_face_detection_task(
-        self,
-        task: Task,
-        video: Video,
-        run_id: str | None = None,
-        model_profile: str | None = None,
+        self, task: Task, video: Video, run_id: str | None = None
     ) -> bool:
         """Process a face detection task for a video.
 
@@ -68,8 +64,6 @@ class FaceDetectionTaskHandler:
             task: The face detection task to process
             video: The video to analyze
             run_id: Optional run ID for tracking (generated if not provided)
-            model_profile: Optional model profile (fast, balanced, high_quality).
-                          If not provided, determined from model name.
 
         Returns:
             True if successful, False otherwise
@@ -83,13 +77,14 @@ class FaceDetectionTaskHandler:
                 logger.info(f"Generated run_id: {run_id}")
 
             # Detect faces in video using configured sample rate
-            # Returns frame-level detections
-            frame_results = self.detection_service.detect_faces_in_video(
+            # This returns the old Face domain models with aggregated detections
+            legacy_faces = self.detection_service.detect_faces_in_video(
                 video_path=video.file_path,
+                video_id=video.video_id,
                 sample_rate=self.sample_rate,
             )
 
-            logger.info(f"Detected faces in {len(frame_results)} frames")
+            logger.info(f"Detected {len(legacy_faces)} unique face clusters")
 
             # Compute provenance hashes
             config = {
@@ -99,27 +94,19 @@ class FaceDetectionTaskHandler:
             config_hash = self._compute_config_hash(config)
             input_hash = self._compute_input_hash(video.file_path)
 
-            # Determine model profile - use provided or infer from model name
-            if model_profile is None:
-                model_profile = self._determine_model_profile(self.model_name)
+            # Determine model profile based on model name
+            model_profile = self._determine_model_profile(self.model_name)
 
+            # Convert legacy aggregated faces to individual artifact envelopes
             # Create one artifact per detection (frame-level granularity)
-            artifacts = []
-            cluster_counter = 0  # Simple cluster ID generation
-
-            for frame_result in frame_results:
-                frame_number = frame_result["frame_number"]
-                timestamp_sec = frame_result["timestamp"]
-                detections = frame_result["detections"]
-
-                for detection in detections:
-                    bbox_coords = detection["bbox"]  # [x1, y1, x2, y2]
-                    confidence = detection["confidence"]
-
-                    # Generate a simple cluster ID for each detection
-                    # In a real implementation, this would use face embeddings
-                    cluster_id = f"face_{cluster_counter}"
-                    cluster_counter += 1
+            saved_count = 0
+            for legacy_face in legacy_faces:
+                # Each legacy face has multiple bounding boxes (one per frame)
+                for bbox_data in legacy_face.bounding_boxes:
+                    frame_number = bbox_data["frame"]
+                    timestamp_sec = bbox_data["timestamp"]
+                    bbox_coords = bbox_data["bbox"]  # [x1, y1, x2, y2]
+                    confidence = bbox_data["confidence"]
 
                     # Convert YOLO bbox format [x1, y1, x2, y2] to [x, y, width, height]
                     x1, y1, x2, y2 = bbox_coords
@@ -129,7 +116,7 @@ class FaceDetectionTaskHandler:
                     payload = FaceDetectionV1(
                         confidence=confidence,
                         bounding_box=bbox,
-                        cluster_id=cluster_id,
+                        cluster_id=legacy_face.person_id,
                         frame_number=frame_number,
                     )
 
@@ -156,11 +143,9 @@ class FaceDetectionTaskHandler:
                         created_at=datetime.utcnow(),
                     )
 
-                    artifacts.append(artifact)
-
-            # Batch insert all artifacts
-            self.artifact_repository.batch_create(artifacts)
-            saved_count = len(artifacts)
+                    # Save to artifact repository
+                    self.artifact_repository.create(artifact)
+                    saved_count += 1
 
             logger.info(
                 f"Face detection complete for video {video.video_id}. "
