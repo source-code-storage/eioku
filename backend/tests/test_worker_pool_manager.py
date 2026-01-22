@@ -8,6 +8,7 @@ from src.domain.models import Task
 from src.services.task_orchestration import TaskType
 from src.services.worker_pool_manager import (
     HashWorker,
+    ObjectDetectionWorker,
     ResourceType,
     TaskWorker,
     WorkerConfig,
@@ -94,8 +95,9 @@ class TestSpecificWorkers:
 
     def test_transcription_worker(self):
         """Test transcription worker."""
+        # Create mock transcription handler
+        mock_handler = Mock()
         # Legacy transcription worker test removed - now using artifact-based workers
-        pass
 
 
 class TestWorkerPool:
@@ -285,11 +287,9 @@ class TestWorkerPoolManager:
         """Test creating default worker pools."""
         self.manager.create_default_pools()
 
-        # Should have pools for all artifact-based task types
+        # Should have pools for artifact-based task types only
         expected_types = {
             TaskType.HASH,
-            TaskType.TRANSCRIPTION,
-            TaskType.SCENE_DETECTION,
             TaskType.OBJECT_DETECTION,
             TaskType.FACE_DETECTION,
             TaskType.OCR,
