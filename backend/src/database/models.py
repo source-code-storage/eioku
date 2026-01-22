@@ -20,6 +20,9 @@ class Video(Base):
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
+
+
+
 class PathConfig(Base):
     __tablename__ = "path_configs"
 
