@@ -205,7 +205,30 @@ This implementation plan breaks down the service separation into discrete, testa
 
 ### 11. Implement reconciler
 
-- [ ] 11.1 Create Reconciler class in backend/src/workers/
+- [x] 11.1 Create ML Service arq worker configuration
+  - Configure arq to consume from ml_jobs queue
+  - Set up consumer group for ml_jobs
+  - Configure max_jobs, job_timeout, max_tries
+  - _Requirements: 3.1, 4.9_
+
+- [x] 11.2 Create process_inference_job() handler in ML Service
+  - Read job payload (task_id, task_type, video_id, video_path, config)
+  - Execute appropriate ML inference (object detection, face detection, etc.)
+  - Create ArtifactEnvelopes with provenance metadata
+  - Batch insert artifacts to PostgreSQL in single transaction
+  - Acknowledge job in Redis (XACK)
+  - Handle inference failures (don't acknowledge, allow retry)
+  - _Requirements: 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 16.1_
+
+- [ ]* 11.3 Write unit test for ML Service job handler
+  - Test job consumption from ml_jobs queue
+  - Test artifact creation and persistence
+  - Test job acknowledgment
+  - _Requirements: 3.1, 3.2_
+
+### 12. Implement reconciler
+
+- [ ] 12.1 Create Reconciler class in backend/src/workers/
   - Implement _sync_pending_tasks() to re-enqueue orphaned PENDING tasks
   - Implement _sync_running_tasks() to sync RUNNING tasks with Redis state
   - Implement _alert_long_running_tasks() to alert (never auto-kill)
