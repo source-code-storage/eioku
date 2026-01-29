@@ -1209,6 +1209,180 @@ class GlobalJumpService:
             limit=limit,
         )
 
+    def _search_locations_global(
+        self,
+        direction: Literal["next", "prev"],
+        from_video_id: str,
+        from_ms: int,
+        geo_bounds: dict | None = None,
+        limit: int = 1,
+    ) -> list[GlobalJumpResult]:
+        """Search for videos with GPS location data in global timeline order.
+
+        Queries the video_locations projection table joined with videos to find
+        videos that have GPS coordinates. Unlike other artifact searches, location
+        data is per-video (not per-timestamp), so results point to the start of
+        each video.
+
+        Args:
+            direction: Navigation direction ("next" for forward, "prev" for backward).
+            from_video_id: Starting video ID for the search.
+            from_ms: Starting timestamp in milliseconds (used for timeline position).
+            geo_bounds: Optional geographic bounds filter with keys:
+                        min_lat, max_lat, min_lon, max_lon.
+            limit: Maximum number of results to return (default 1).
+
+        Returns:
+            List of GlobalJumpResult objects ordered by global timeline.
+            For "next": ascending order (chronologically after current position).
+            For "prev": descending order (chronologically before current position).
+            Each result points to start_ms=0 since location is per-video.
+            Empty list if no videos with location data are found.
+
+        Raises:
+            VideoNotFoundError: If from_video_id does not exist.
+        """
+        # Get the current video to determine its position in the global timeline
+        current_video = self._get_video(from_video_id)
+        current_file_created_at = current_video.file_created_at
+
+        # Convert datetime to string for SQLite comparison
+        current_file_created_at_param = None
+        if current_file_created_at is not None:
+            bind = self.session.bind
+            is_sqlite = bind.dialect.name == "sqlite"
+            if is_sqlite:
+                current_file_created_at_param = current_file_created_at.strftime(
+                    "%Y-%m-%d %H:%M:%S.%f"
+                )
+            else:
+                current_file_created_at_param = current_file_created_at
+
+        # Build direction-specific SQL components
+        # Note: Location is per-video, so we exclude the current video entirely
+        # and only look at videos chronologically after/before it
+        if direction == "next":
+            order_clause = """
+                ORDER BY v.file_created_at ASC NULLS LAST,
+                         v.video_id ASC
+            """
+            if current_file_created_at is not None:
+                direction_clause = """
+                    AND (
+                        v.file_created_at > :current_file_created_at
+                        OR v.file_created_at IS NULL
+                        OR (v.file_created_at = :current_file_created_at
+                            AND v.video_id > :from_video_id)
+                    )
+                """
+            else:
+                direction_clause = """
+                    AND (
+                        v.file_created_at IS NULL
+                        AND v.video_id > :from_video_id
+                    )
+                """
+        else:  # direction == "prev"
+            order_clause = """
+                ORDER BY v.file_created_at DESC NULLS LAST,
+                         v.video_id DESC
+            """
+            if current_file_created_at is not None:
+                direction_clause = """
+                    AND (
+                        (v.file_created_at IS NOT NULL
+                         AND v.file_created_at < :current_file_created_at)
+                        OR (v.file_created_at = :current_file_created_at
+                            AND v.video_id < :from_video_id)
+                    )
+                """
+            else:
+                direction_clause = """
+                    AND (
+                        v.file_created_at IS NOT NULL
+                        OR (v.file_created_at IS NULL
+                            AND v.video_id < :from_video_id)
+                    )
+                """
+
+        # Build geo_bounds filter if provided
+        geo_filter = ""
+        if geo_bounds:
+            geo_conditions = []
+            if "min_lat" in geo_bounds:
+                geo_conditions.append("l.latitude >= :min_lat")
+            if "max_lat" in geo_bounds:
+                geo_conditions.append("l.latitude <= :max_lat")
+            if "min_lon" in geo_bounds:
+                geo_conditions.append("l.longitude >= :min_lon")
+            if "max_lon" in geo_bounds:
+                geo_conditions.append("l.longitude <= :max_lon")
+            if geo_conditions:
+                geo_filter = "AND " + " AND ".join(geo_conditions)
+
+        sql = text(
+            f"""
+            SELECT
+                l.artifact_id,
+                l.video_id,
+                l.latitude,
+                l.longitude,
+                l.altitude,
+                l.country,
+                l.state,
+                l.city,
+                v.filename,
+                v.file_created_at
+            FROM video_locations l
+            JOIN videos v ON v.video_id = l.video_id
+            WHERE 1=1
+            {direction_clause}
+            {geo_filter}
+            {order_clause}
+            LIMIT :limit
+            """
+        )
+
+        params = {
+            "from_video_id": from_video_id,
+            "limit": limit,
+        }
+        if current_file_created_at_param is not None:
+            params["current_file_created_at"] = current_file_created_at_param
+        if geo_bounds:
+            params.update(geo_bounds)
+
+        rows = self.session.execute(sql, params).fetchall()
+
+        # Convert results to GlobalJumpResult objects
+        results = []
+        for row in rows:
+            result = self._to_global_result(
+                video_id=row.video_id,
+                video_filename=row.filename,
+                file_created_at=row.file_created_at,
+                start_ms=0,  # Location is per-video, so start at beginning
+                end_ms=0,
+                artifact_id=row.artifact_id,
+                preview={
+                    "latitude": row.latitude,
+                    "longitude": row.longitude,
+                    "altitude": row.altitude,
+                    "country": row.country,
+                    "state": row.state,
+                    "city": row.city,
+                },
+            )
+            results.append(result)
+
+        logger.debug(
+            f"_search_locations_global: direction={direction}, "
+            f"from_video_id={from_video_id}, from_ms={from_ms}, "
+            f"geo_bounds={geo_bounds}, found {len(results)} results"
+        )
+
+        return results
+
     # Valid artifact kinds for global jump navigation
     VALID_KINDS = {"object", "face", "transcript", "ocr", "scene", "place", "location"}
 
@@ -1314,10 +1488,11 @@ class GlobalJumpService:
                 limit=limit,
             )
         elif kind == "location":
-            # Location search not yet implemented
-            # Will be implemented in task 12
-            raise InvalidParameterError(
-                "kind", "Location search is not yet implemented"
+            return self._search_locations_global(
+                direction="next",
+                from_video_id=from_video_id,
+                from_ms=from_ms,
+                limit=limit,
             )
 
         # This should never be reached due to the validation above
@@ -1428,10 +1603,11 @@ class GlobalJumpService:
                 limit=limit,
             )
         elif kind == "location":
-            # Location search not yet implemented
-            # Will be implemented in task 12
-            raise InvalidParameterError(
-                "kind", "Location search is not yet implemented"
+            return self._search_locations_global(
+                direction="prev",
+                from_video_id=from_video_id,
+                from_ms=from_ms,
+                limit=limit,
             )
 
         # This should never be reached due to the validation above

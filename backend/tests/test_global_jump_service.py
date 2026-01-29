@@ -2236,3 +2236,521 @@ class TestJumpPrevPlace:
 
         assert len(results) == 1
         assert results[0].artifact_id == "place_1"
+
+
+class TestSearchLocationsGlobalNext:
+    """Tests for _search_locations_global with direction='next'."""
+
+    @pytest.fixture
+    def setup_video_locations(self, session):
+        """Set up video_locations table for testing."""
+        session.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS video_locations (
+                    id INTEGER PRIMARY KEY,
+                    video_id TEXT NOT NULL UNIQUE,
+                    artifact_id TEXT NOT NULL,
+                    latitude REAL NOT NULL,
+                    longitude REAL NOT NULL,
+                    altitude REAL,
+                    country TEXT,
+                    state TEXT,
+                    city TEXT
+                )
+                """
+            )
+        )
+        session.commit()
+        yield
+        session.execute(text("DROP TABLE IF EXISTS video_locations"))
+        session.commit()
+
+    def _insert_location(
+        self,
+        session,
+        video_id: str,
+        artifact_id: str,
+        latitude: float,
+        longitude: float,
+        altitude: float | None = None,
+        country: str | None = None,
+        state: str | None = None,
+        city: str | None = None,
+    ):
+        """Helper to insert location into video_locations table."""
+        session.execute(
+            text(
+                """
+                INSERT INTO video_locations
+                    (video_id, artifact_id, latitude, longitude, altitude,
+                     country, state, city)
+                VALUES (:video_id, :artifact_id, :latitude, :longitude, :altitude,
+                        :country, :state, :city)
+                """
+            ),
+            {
+                "video_id": video_id,
+                "artifact_id": artifact_id,
+                "latitude": latitude,
+                "longitude": longitude,
+                "altitude": altitude,
+                "country": country,
+                "state": state,
+                "city": city,
+            },
+        )
+        session.commit()
+
+    def test_search_locations_next_single_video(
+        self, session, global_jump_service, setup_video_locations
+    ):
+        """Test searching for next video with location."""
+        video1 = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        video2 = create_test_video(
+            session, "video_2", "video2.mp4", datetime(2025, 1, 2, 12, 0, 0)
+        )
+
+        self._insert_location(
+            session,
+            video1.video_id,
+            "loc_1",
+            35.6762,
+            139.6503,
+            country="Japan",
+            city="Tokyo",
+        )
+        self._insert_location(
+            session,
+            video2.video_id,
+            "loc_2",
+            40.7128,
+            -74.0060,
+            country="USA",
+            city="New York",
+        )
+
+        results = global_jump_service._search_locations_global(
+            direction="next",
+            from_video_id=video1.video_id,
+            from_ms=0,
+        )
+
+        assert len(results) == 1
+        assert results[0].video_id == "video_2"
+        assert results[0].artifact_id == "loc_2"
+        assert results[0].preview["city"] == "New York"
+
+    def test_search_locations_next_ordering(
+        self, session, global_jump_service, setup_video_locations
+    ):
+        """Test that results are ordered by global timeline."""
+        video1 = create_test_video(
+            session, "video_a", "video_a.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        video2 = create_test_video(
+            session, "video_b", "video_b.mp4", datetime(2025, 1, 2, 12, 0, 0)
+        )
+        video3 = create_test_video(
+            session, "video_c", "video_c.mp4", datetime(2025, 1, 3, 12, 0, 0)
+        )
+
+        self._insert_location(session, video3.video_id, "loc_3", 51.5074, -0.1278)
+        self._insert_location(session, video1.video_id, "loc_1", 35.6762, 139.6503)
+        self._insert_location(session, video2.video_id, "loc_2", 40.7128, -74.0060)
+
+        results = global_jump_service._search_locations_global(
+            direction="next",
+            from_video_id=video1.video_id,
+            from_ms=0,
+            limit=3,
+        )
+
+        assert len(results) == 2
+        assert results[0].video_id == "video_b"
+        assert results[1].video_id == "video_c"
+
+    def test_search_locations_next_no_results(
+        self, session, global_jump_service, setup_video_locations
+    ):
+        """Test that empty list is returned when no locations found."""
+        video = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        self._insert_location(session, video.video_id, "loc_1", 35.6762, 139.6503)
+
+        results = global_jump_service._search_locations_global(
+            direction="next",
+            from_video_id=video.video_id,
+            from_ms=0,
+        )
+
+        assert len(results) == 0
+
+    def test_search_locations_next_video_not_found(
+        self, session, global_jump_service, setup_video_locations
+    ):
+        """Test that VideoNotFoundError is raised for non-existent video."""
+        with pytest.raises(VideoNotFoundError) as exc_info:
+            global_jump_service._search_locations_global(
+                direction="next",
+                from_video_id="non_existent_video",
+                from_ms=0,
+            )
+
+        assert exc_info.value.video_id == "non_existent_video"
+
+    def test_search_locations_next_result_contains_all_fields(
+        self, session, global_jump_service, setup_video_locations
+    ):
+        """Test that results contain all required fields."""
+        video1 = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        video2 = create_test_video(
+            session, "video_2", "video2.mp4", datetime(2025, 1, 2, 12, 0, 0)
+        )
+
+        self._insert_location(
+            session,
+            video2.video_id,
+            "loc_2",
+            35.6762,
+            139.6503,
+            altitude=10.5,
+            country="Japan",
+            state="Tokyo",
+            city="Shibuya",
+        )
+
+        results = global_jump_service._search_locations_global(
+            direction="next",
+            from_video_id=video1.video_id,
+            from_ms=0,
+        )
+
+        assert len(results) == 1
+        result = results[0]
+        assert result.video_id == "video_2"
+        assert result.video_filename == "video2.mp4"
+        assert result.jump_to.start_ms == 0
+        assert result.jump_to.end_ms == 0
+        assert result.artifact_id == "loc_2"
+        assert result.preview["latitude"] == 35.6762
+        assert result.preview["longitude"] == 139.6503
+        assert result.preview["altitude"] == 10.5
+        assert result.preview["country"] == "Japan"
+        assert result.preview["state"] == "Tokyo"
+        assert result.preview["city"] == "Shibuya"
+
+
+class TestSearchLocationsGlobalPrev:
+    """Tests for _search_locations_global with direction='prev'."""
+
+    @pytest.fixture
+    def setup_video_locations(self, session):
+        """Set up video_locations table for testing."""
+        session.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS video_locations (
+                    id INTEGER PRIMARY KEY,
+                    video_id TEXT NOT NULL UNIQUE,
+                    artifact_id TEXT NOT NULL,
+                    latitude REAL NOT NULL,
+                    longitude REAL NOT NULL,
+                    altitude REAL,
+                    country TEXT,
+                    state TEXT,
+                    city TEXT
+                )
+                """
+            )
+        )
+        session.commit()
+        yield
+        session.execute(text("DROP TABLE IF EXISTS video_locations"))
+        session.commit()
+
+    def _insert_location(
+        self,
+        session,
+        video_id: str,
+        artifact_id: str,
+        latitude: float,
+        longitude: float,
+        altitude: float | None = None,
+        country: str | None = None,
+        state: str | None = None,
+        city: str | None = None,
+    ):
+        """Helper to insert location into video_locations table."""
+        session.execute(
+            text(
+                """
+                INSERT INTO video_locations
+                    (video_id, artifact_id, latitude, longitude, altitude,
+                     country, state, city)
+                VALUES (:video_id, :artifact_id, :latitude, :longitude, :altitude,
+                        :country, :state, :city)
+                """
+            ),
+            {
+                "video_id": video_id,
+                "artifact_id": artifact_id,
+                "latitude": latitude,
+                "longitude": longitude,
+                "altitude": altitude,
+                "country": country,
+                "state": state,
+                "city": city,
+            },
+        )
+        session.commit()
+
+    def test_search_locations_prev_single_video(
+        self, session, global_jump_service, setup_video_locations
+    ):
+        """Test searching for previous video with location."""
+        video1 = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        video2 = create_test_video(
+            session, "video_2", "video2.mp4", datetime(2025, 1, 2, 12, 0, 0)
+        )
+
+        self._insert_location(
+            session,
+            video1.video_id,
+            "loc_1",
+            35.6762,
+            139.6503,
+            country="Japan",
+            city="Tokyo",
+        )
+        self._insert_location(
+            session,
+            video2.video_id,
+            "loc_2",
+            40.7128,
+            -74.0060,
+            country="USA",
+            city="New York",
+        )
+
+        results = global_jump_service._search_locations_global(
+            direction="prev",
+            from_video_id=video2.video_id,
+            from_ms=0,
+        )
+
+        assert len(results) == 1
+        assert results[0].video_id == "video_1"
+        assert results[0].artifact_id == "loc_1"
+        assert results[0].preview["city"] == "Tokyo"
+
+    def test_search_locations_prev_ordering(
+        self, session, global_jump_service, setup_video_locations
+    ):
+        """Test that results are ordered by global timeline (descending)."""
+        video1 = create_test_video(
+            session, "video_a", "video_a.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        video2 = create_test_video(
+            session, "video_b", "video_b.mp4", datetime(2025, 1, 2, 12, 0, 0)
+        )
+        video3 = create_test_video(
+            session, "video_c", "video_c.mp4", datetime(2025, 1, 3, 12, 0, 0)
+        )
+
+        self._insert_location(session, video1.video_id, "loc_1", 35.6762, 139.6503)
+        self._insert_location(session, video2.video_id, "loc_2", 40.7128, -74.0060)
+        self._insert_location(session, video3.video_id, "loc_3", 51.5074, -0.1278)
+
+        results = global_jump_service._search_locations_global(
+            direction="prev",
+            from_video_id=video3.video_id,
+            from_ms=0,
+            limit=3,
+        )
+
+        assert len(results) == 2
+        # Should be ordered by file_created_at descending
+        assert results[0].video_id == "video_b"
+        assert results[1].video_id == "video_a"
+
+    def test_search_locations_prev_no_results(
+        self, session, global_jump_service, setup_video_locations
+    ):
+        """Test that empty list is returned when no locations found."""
+        video = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        self._insert_location(session, video.video_id, "loc_1", 35.6762, 139.6503)
+
+        results = global_jump_service._search_locations_global(
+            direction="prev",
+            from_video_id=video.video_id,
+            from_ms=0,
+        )
+
+        assert len(results) == 0
+
+
+class TestJumpNextLocation:
+    """Tests for jump_next() with kind='location'."""
+
+    @pytest.fixture
+    def setup_video_locations(self, session):
+        """Set up video_locations table for testing."""
+        session.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS video_locations (
+                    id INTEGER PRIMARY KEY,
+                    video_id TEXT NOT NULL UNIQUE,
+                    artifact_id TEXT NOT NULL,
+                    latitude REAL NOT NULL,
+                    longitude REAL NOT NULL,
+                    altitude REAL,
+                    country TEXT,
+                    state TEXT,
+                    city TEXT
+                )
+                """
+            )
+        )
+        session.commit()
+        yield
+        session.execute(text("DROP TABLE IF EXISTS video_locations"))
+        session.commit()
+
+    def _insert_location(
+        self,
+        session,
+        video_id: str,
+        artifact_id: str,
+        latitude: float,
+        longitude: float,
+    ):
+        """Helper to insert location into video_locations table."""
+        session.execute(
+            text(
+                """
+                INSERT INTO video_locations
+                    (video_id, artifact_id, latitude, longitude)
+                VALUES (:video_id, :artifact_id, :latitude, :longitude)
+                """
+            ),
+            {
+                "video_id": video_id,
+                "artifact_id": artifact_id,
+                "latitude": latitude,
+                "longitude": longitude,
+            },
+        )
+        session.commit()
+
+    def test_jump_next_location_routes_correctly(
+        self, session, global_jump_service, setup_video_locations
+    ):
+        """Test that kind='location' routes to location search."""
+        video1 = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        video2 = create_test_video(
+            session, "video_2", "video2.mp4", datetime(2025, 1, 2, 12, 0, 0)
+        )
+
+        self._insert_location(session, video2.video_id, "loc_2", 35.6762, 139.6503)
+
+        results = global_jump_service.jump_next(
+            kind="location",
+            from_video_id=video1.video_id,
+            from_ms=0,
+        )
+
+        assert len(results) == 1
+        assert results[0].video_id == "video_2"
+        assert "latitude" in results[0].preview
+        assert "longitude" in results[0].preview
+
+
+class TestJumpPrevLocation:
+    """Tests for jump_prev() with kind='location'."""
+
+    @pytest.fixture
+    def setup_video_locations(self, session):
+        """Set up video_locations table for testing."""
+        session.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS video_locations (
+                    id INTEGER PRIMARY KEY,
+                    video_id TEXT NOT NULL UNIQUE,
+                    artifact_id TEXT NOT NULL,
+                    latitude REAL NOT NULL,
+                    longitude REAL NOT NULL,
+                    altitude REAL,
+                    country TEXT,
+                    state TEXT,
+                    city TEXT
+                )
+                """
+            )
+        )
+        session.commit()
+        yield
+        session.execute(text("DROP TABLE IF EXISTS video_locations"))
+        session.commit()
+
+    def _insert_location(
+        self,
+        session,
+        video_id: str,
+        artifact_id: str,
+        latitude: float,
+        longitude: float,
+    ):
+        """Helper to insert location into video_locations table."""
+        session.execute(
+            text(
+                """
+                INSERT INTO video_locations
+                    (video_id, artifact_id, latitude, longitude)
+                VALUES (:video_id, :artifact_id, :latitude, :longitude)
+                """
+            ),
+            {
+                "video_id": video_id,
+                "artifact_id": artifact_id,
+                "latitude": latitude,
+                "longitude": longitude,
+            },
+        )
+        session.commit()
+
+    def test_jump_prev_location_routes_correctly(
+        self, session, global_jump_service, setup_video_locations
+    ):
+        """Test that kind='location' routes to location search with prev direction."""
+        video1 = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        video2 = create_test_video(
+            session, "video_2", "video2.mp4", datetime(2025, 1, 2, 12, 0, 0)
+        )
+
+        self._insert_location(session, video1.video_id, "loc_1", 35.6762, 139.6503)
+
+        results = global_jump_service.jump_prev(
+            kind="location",
+            from_video_id=video2.video_id,
+            from_ms=0,
+        )
+
+        assert len(results) == 1
+        assert results[0].video_id == "video_1"
+        assert "latitude" in results[0].preview
