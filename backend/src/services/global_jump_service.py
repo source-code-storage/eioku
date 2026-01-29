@@ -1108,3 +1108,109 @@ class GlobalJumpService:
 
         # This should never be reached due to the validation above
         raise InvalidParameterError("kind", f"Unknown artifact kind: {kind}")
+
+    def jump_prev(
+        self,
+        kind: str,
+        from_video_id: str,
+        from_ms: int | None = None,
+        label: str | None = None,
+        query: str | None = None,
+        face_cluster_id: str | None = None,
+        min_confidence: float | None = None,
+        limit: int = 1,
+    ) -> list[GlobalJumpResult]:
+        """Navigate backward in the global timeline to find matching artifacts.
+
+        Routes to the appropriate search method based on the artifact kind.
+        Results are ordered chronologically before the current position.
+
+        Args:
+            kind: Type of artifact to search for. Must be one of:
+                  object, face, transcript, ocr, scene, place, location.
+            from_video_id: Starting video ID for the search.
+            from_ms: Starting timestamp in milliseconds. If None, defaults to
+                     a large value representing the end of the video.
+            label: Filter by label (for object and place kinds).
+            query: Text search query (for transcript and ocr kinds).
+            face_cluster_id: Filter by face cluster ID (for face kind).
+            min_confidence: Minimum confidence threshold (0-1).
+            limit: Maximum number of results to return (default 1).
+
+        Returns:
+            List of GlobalJumpResult objects ordered by global timeline
+            (descending - most recent first).
+            Empty list if no matching artifacts are found.
+
+        Raises:
+            InvalidParameterError: If kind is not a valid artifact type.
+            VideoNotFoundError: If from_video_id does not exist.
+        """
+        if kind not in self.VALID_KINDS:
+            valid_kinds = ", ".join(sorted(self.VALID_KINDS))
+            raise InvalidParameterError(
+                "kind",
+                f"Invalid artifact kind. Must be one of: {valid_kinds}",
+            )
+
+        # Default from_ms to a large value for "prev" direction
+        # This represents "end of video" - searching backward from the end
+        if from_ms is None:
+            from_ms = 2**31 - 1  # Max 32-bit signed integer
+
+        if kind == "object":
+            return self._search_objects_global(
+                direction="prev",
+                from_video_id=from_video_id,
+                from_ms=from_ms,
+                label=label,
+                min_confidence=min_confidence,
+                limit=limit,
+            )
+        elif kind == "face":
+            # Face cluster search not yet implemented
+            # Will be implemented in task 6
+            raise InvalidParameterError(
+                "kind", "Face cluster search is not yet implemented"
+            )
+        elif kind == "transcript":
+            if query is None:
+                raise InvalidParameterError(
+                    "query", "Query parameter is required for transcript search"
+                )
+            return self._search_transcript_global(
+                direction="prev",
+                from_video_id=from_video_id,
+                from_ms=from_ms,
+                query=query,
+                limit=limit,
+            )
+        elif kind == "ocr":
+            if query is None:
+                raise InvalidParameterError(
+                    "query", "Query parameter is required for OCR search"
+                )
+            return self._search_ocr_global(
+                direction="prev",
+                from_video_id=from_video_id,
+                from_ms=from_ms,
+                query=query,
+                limit=limit,
+            )
+        elif kind == "scene":
+            # Scene search not yet implemented
+            # Will be implemented in task 11
+            raise InvalidParameterError("kind", "Scene search is not yet implemented")
+        elif kind == "place":
+            # Place search not yet implemented
+            # Will be implemented in task 11
+            raise InvalidParameterError("kind", "Place search is not yet implemented")
+        elif kind == "location":
+            # Location search not yet implemented
+            # Will be implemented in task 12
+            raise InvalidParameterError(
+                "kind", "Location search is not yet implemented"
+            )
+
+        # This should never be reached due to the validation above
+        raise InvalidParameterError("kind", f"Unknown artifact kind: {kind}")
