@@ -1678,3 +1678,561 @@ class TestJumpPrev:
 
         assert len(results) == 1
         assert results[0].artifact_id == "obj_1"
+
+
+class TestSearchScenesGlobalNext:
+    """Tests for _search_scenes_global with direction='next'."""
+
+    @pytest.fixture
+    def setup_scene_ranges(self, session):
+        """Set up scene_ranges table for testing."""
+        session.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS scene_ranges (
+                    artifact_id TEXT PRIMARY KEY,
+                    asset_id TEXT NOT NULL,
+                    scene_index INTEGER NOT NULL,
+                    start_ms INTEGER NOT NULL,
+                    end_ms INTEGER NOT NULL
+                )
+                """
+            )
+        )
+        session.commit()
+        yield
+        session.execute(text("DROP TABLE IF EXISTS scene_ranges"))
+        session.commit()
+
+    def _insert_scene(
+        self,
+        session,
+        artifact_id: str,
+        asset_id: str,
+        scene_index: int,
+        start_ms: int,
+        end_ms: int,
+    ):
+        """Helper to insert scene into scene_ranges table."""
+        session.execute(
+            text(
+                """
+                INSERT INTO scene_ranges
+                    (artifact_id, asset_id, scene_index, start_ms, end_ms)
+                VALUES (:artifact_id, :asset_id, :scene_index, :start_ms, :end_ms)
+                """
+            ),
+            {
+                "artifact_id": artifact_id,
+                "asset_id": asset_id,
+                "scene_index": scene_index,
+                "start_ms": start_ms,
+                "end_ms": end_ms,
+            },
+        )
+        session.commit()
+
+    def test_search_scenes_next_single_video(
+        self, session, global_jump_service, setup_scene_ranges
+    ):
+        """Test searching for next scene within the same video."""
+        video = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        self._insert_scene(session, "scene_1", video.video_id, 0, 0, 5000)
+        self._insert_scene(session, "scene_2", video.video_id, 1, 5000, 10000)
+        self._insert_scene(session, "scene_3", video.video_id, 2, 10000, 15000)
+
+        results = global_jump_service._search_scenes_global(
+            direction="next",
+            from_video_id=video.video_id,
+            from_ms=3000,
+        )
+
+        assert len(results) == 1
+        assert results[0].artifact_id == "scene_2"
+        assert results[0].jump_to.start_ms == 5000
+        assert results[0].preview["scene_index"] == 1
+
+    def test_search_scenes_next_cross_video(
+        self, session, global_jump_service, setup_scene_ranges
+    ):
+        """Test searching for next scene across multiple videos."""
+        video1 = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        video2 = create_test_video(
+            session, "video_2", "video2.mp4", datetime(2025, 1, 2, 12, 0, 0)
+        )
+
+        self._insert_scene(session, "scene_1", video1.video_id, 0, 0, 5000)
+        self._insert_scene(session, "scene_2", video2.video_id, 0, 0, 5000)
+
+        # Search from end of video1
+        results = global_jump_service._search_scenes_global(
+            direction="next",
+            from_video_id=video1.video_id,
+            from_ms=10000,
+        )
+
+        assert len(results) == 1
+        assert results[0].video_id == "video_2"
+        assert results[0].artifact_id == "scene_2"
+
+    def test_search_scenes_next_ordering(
+        self, session, global_jump_service, setup_scene_ranges
+    ):
+        """Test that results are ordered by global timeline."""
+        video1 = create_test_video(
+            session, "video_a", "video_a.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        video2 = create_test_video(
+            session, "video_b", "video_b.mp4", datetime(2025, 1, 2, 12, 0, 0)
+        )
+        video3 = create_test_video(
+            session, "video_c", "video_c.mp4", datetime(2025, 1, 3, 12, 0, 0)
+        )
+
+        self._insert_scene(session, "scene_3", video3.video_id, 0, 0, 5000)
+        self._insert_scene(session, "scene_1", video1.video_id, 0, 0, 5000)
+        self._insert_scene(session, "scene_2", video2.video_id, 0, 0, 5000)
+
+        results = global_jump_service._search_scenes_global(
+            direction="next",
+            from_video_id=video1.video_id,
+            from_ms=10000,
+            limit=3,
+        )
+
+        assert len(results) == 2
+        assert results[0].video_id == "video_b"
+        assert results[1].video_id == "video_c"
+
+    def test_search_scenes_next_no_results(
+        self, session, global_jump_service, setup_scene_ranges
+    ):
+        """Test that empty list is returned when no scenes found."""
+        video = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        self._insert_scene(session, "scene_1", video.video_id, 0, 0, 5000)
+
+        results = global_jump_service._search_scenes_global(
+            direction="next",
+            from_video_id=video.video_id,
+            from_ms=10000,
+        )
+
+        assert len(results) == 0
+
+    def test_search_scenes_next_video_not_found(
+        self, session, global_jump_service, setup_scene_ranges
+    ):
+        """Test that VideoNotFoundError is raised for non-existent video."""
+        with pytest.raises(VideoNotFoundError) as exc_info:
+            global_jump_service._search_scenes_global(
+                direction="next",
+                from_video_id="non_existent_video",
+                from_ms=0,
+            )
+
+        assert exc_info.value.video_id == "non_existent_video"
+
+
+class TestSearchScenesGlobalPrev:
+    """Tests for _search_scenes_global with direction='prev'."""
+
+    @pytest.fixture
+    def setup_scene_ranges(self, session):
+        """Set up scene_ranges table for testing."""
+        session.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS scene_ranges (
+                    artifact_id TEXT PRIMARY KEY,
+                    asset_id TEXT NOT NULL,
+                    scene_index INTEGER NOT NULL,
+                    start_ms INTEGER NOT NULL,
+                    end_ms INTEGER NOT NULL
+                )
+                """
+            )
+        )
+        session.commit()
+        yield
+        session.execute(text("DROP TABLE IF EXISTS scene_ranges"))
+        session.commit()
+
+    def _insert_scene(
+        self,
+        session,
+        artifact_id: str,
+        asset_id: str,
+        scene_index: int,
+        start_ms: int,
+        end_ms: int,
+    ):
+        """Helper to insert scene into scene_ranges table."""
+        session.execute(
+            text(
+                """
+                INSERT INTO scene_ranges
+                    (artifact_id, asset_id, scene_index, start_ms, end_ms)
+                VALUES (:artifact_id, :asset_id, :scene_index, :start_ms, :end_ms)
+                """
+            ),
+            {
+                "artifact_id": artifact_id,
+                "asset_id": asset_id,
+                "scene_index": scene_index,
+                "start_ms": start_ms,
+                "end_ms": end_ms,
+            },
+        )
+        session.commit()
+
+    def test_search_scenes_prev_single_video(
+        self, session, global_jump_service, setup_scene_ranges
+    ):
+        """Test searching for previous scene within the same video."""
+        video = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        self._insert_scene(session, "scene_1", video.video_id, 0, 0, 5000)
+        self._insert_scene(session, "scene_2", video.video_id, 1, 5000, 10000)
+        self._insert_scene(session, "scene_3", video.video_id, 2, 10000, 15000)
+
+        results = global_jump_service._search_scenes_global(
+            direction="prev",
+            from_video_id=video.video_id,
+            from_ms=8000,
+        )
+
+        assert len(results) == 1
+        assert results[0].artifact_id == "scene_2"
+        assert results[0].jump_to.start_ms == 5000
+
+    def test_search_scenes_prev_cross_video(
+        self, session, global_jump_service, setup_scene_ranges
+    ):
+        """Test searching for previous scene across multiple videos."""
+        video1 = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        video2 = create_test_video(
+            session, "video_2", "video2.mp4", datetime(2025, 1, 2, 12, 0, 0)
+        )
+
+        self._insert_scene(session, "scene_1", video1.video_id, 0, 5000, 10000)
+        self._insert_scene(session, "scene_2", video2.video_id, 0, 5000, 10000)
+
+        # Search from beginning of video2
+        results = global_jump_service._search_scenes_global(
+            direction="prev",
+            from_video_id=video2.video_id,
+            from_ms=0,
+        )
+
+        assert len(results) == 1
+        assert results[0].video_id == "video_1"
+        assert results[0].artifact_id == "scene_1"
+
+    def test_search_scenes_prev_ordering(
+        self, session, global_jump_service, setup_scene_ranges
+    ):
+        """Test that results are ordered by global timeline (descending)."""
+        video1 = create_test_video(
+            session, "video_a", "video_a.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        video2 = create_test_video(
+            session, "video_b", "video_b.mp4", datetime(2025, 1, 2, 12, 0, 0)
+        )
+        video3 = create_test_video(
+            session, "video_c", "video_c.mp4", datetime(2025, 1, 3, 12, 0, 0)
+        )
+
+        self._insert_scene(session, "scene_1", video1.video_id, 0, 0, 5000)
+        self._insert_scene(session, "scene_2", video2.video_id, 0, 0, 5000)
+        self._insert_scene(session, "scene_3", video3.video_id, 0, 0, 5000)
+
+        results = global_jump_service._search_scenes_global(
+            direction="prev",
+            from_video_id=video3.video_id,
+            from_ms=0,
+            limit=3,
+        )
+
+        assert len(results) == 2
+        # Should be ordered by file_created_at descending
+        assert results[0].video_id == "video_b"
+        assert results[1].video_id == "video_a"
+
+    def test_search_scenes_prev_no_results(
+        self, session, global_jump_service, setup_scene_ranges
+    ):
+        """Test that empty list is returned when no scenes found."""
+        video = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        self._insert_scene(session, "scene_1", video.video_id, 0, 5000, 10000)
+
+        results = global_jump_service._search_scenes_global(
+            direction="prev",
+            from_video_id=video.video_id,
+            from_ms=1000,
+        )
+
+        assert len(results) == 0
+
+
+class TestSearchPlacesGlobal:
+    """Tests for _search_places_global method."""
+
+    def test_search_places_next_routes_to_objects(self, session, global_jump_service):
+        """Test that place search uses object_labels table."""
+        video = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        # Places are stored as object labels
+        create_object_label(
+            session, "place_1", video.video_id, "kitchen", 0.9, 100, 200
+        )
+        create_object_label(session, "place_2", video.video_id, "beach", 0.8, 500, 600)
+
+        results = global_jump_service._search_places_global(
+            direction="next",
+            from_video_id=video.video_id,
+            from_ms=0,
+            label="kitchen",
+        )
+
+        assert len(results) == 1
+        assert results[0].artifact_id == "place_1"
+        assert results[0].preview["label"] == "kitchen"
+
+    def test_search_places_prev_routes_to_objects(self, session, global_jump_service):
+        """Test that place search prev direction works."""
+        video = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        create_object_label(session, "place_1", video.video_id, "office", 0.9, 100, 200)
+        create_object_label(session, "place_2", video.video_id, "office", 0.8, 500, 600)
+
+        results = global_jump_service._search_places_global(
+            direction="prev",
+            from_video_id=video.video_id,
+            from_ms=400,
+            label="office",
+        )
+
+        assert len(results) == 1
+        assert results[0].artifact_id == "place_1"
+
+    def test_search_places_with_confidence_filter(self, session, global_jump_service):
+        """Test that confidence filter is applied to place search."""
+        video = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        create_object_label(session, "place_1", video.video_id, "park", 0.5, 100, 200)
+        create_object_label(session, "place_2", video.video_id, "park", 0.9, 500, 600)
+
+        results = global_jump_service._search_places_global(
+            direction="next",
+            from_video_id=video.video_id,
+            from_ms=0,
+            label="park",
+            min_confidence=0.8,
+        )
+
+        assert len(results) == 1
+        assert results[0].artifact_id == "place_2"
+
+
+class TestJumpNextScene:
+    """Tests for jump_next() with kind='scene'."""
+
+    @pytest.fixture
+    def setup_scene_ranges(self, session):
+        """Set up scene_ranges table for testing."""
+        session.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS scene_ranges (
+                    artifact_id TEXT PRIMARY KEY,
+                    asset_id TEXT NOT NULL,
+                    scene_index INTEGER NOT NULL,
+                    start_ms INTEGER NOT NULL,
+                    end_ms INTEGER NOT NULL
+                )
+                """
+            )
+        )
+        session.commit()
+        yield
+        session.execute(text("DROP TABLE IF EXISTS scene_ranges"))
+        session.commit()
+
+    def _insert_scene(
+        self,
+        session,
+        artifact_id: str,
+        asset_id: str,
+        scene_index: int,
+        start_ms: int,
+        end_ms: int,
+    ):
+        """Helper to insert scene into scene_ranges table."""
+        session.execute(
+            text(
+                """
+                INSERT INTO scene_ranges
+                    (artifact_id, asset_id, scene_index, start_ms, end_ms)
+                VALUES (:artifact_id, :asset_id, :scene_index, :start_ms, :end_ms)
+                """
+            ),
+            {
+                "artifact_id": artifact_id,
+                "asset_id": asset_id,
+                "scene_index": scene_index,
+                "start_ms": start_ms,
+                "end_ms": end_ms,
+            },
+        )
+        session.commit()
+
+    def test_jump_next_scene_routes_correctly(
+        self, session, global_jump_service, setup_scene_ranges
+    ):
+        """Test that kind='scene' routes to scene search."""
+        video = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        self._insert_scene(session, "scene_1", video.video_id, 0, 100, 5000)
+
+        results = global_jump_service.jump_next(
+            kind="scene",
+            from_video_id=video.video_id,
+            from_ms=0,
+        )
+
+        assert len(results) == 1
+        assert results[0].artifact_id == "scene_1"
+        assert "scene_index" in results[0].preview
+
+
+class TestJumpNextPlace:
+    """Tests for jump_next() with kind='place'."""
+
+    def test_jump_next_place_routes_correctly(self, session, global_jump_service):
+        """Test that kind='place' routes to place search."""
+        video = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        create_object_label(
+            session, "place_1", video.video_id, "restaurant", 0.9, 100, 200
+        )
+
+        results = global_jump_service.jump_next(
+            kind="place",
+            from_video_id=video.video_id,
+            from_ms=0,
+            label="restaurant",
+        )
+
+        assert len(results) == 1
+        assert results[0].artifact_id == "place_1"
+        assert results[0].preview["label"] == "restaurant"
+
+
+class TestJumpPrevScene:
+    """Tests for jump_prev() with kind='scene'."""
+
+    @pytest.fixture
+    def setup_scene_ranges(self, session):
+        """Set up scene_ranges table for testing."""
+        session.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS scene_ranges (
+                    artifact_id TEXT PRIMARY KEY,
+                    asset_id TEXT NOT NULL,
+                    scene_index INTEGER NOT NULL,
+                    start_ms INTEGER NOT NULL,
+                    end_ms INTEGER NOT NULL
+                )
+                """
+            )
+        )
+        session.commit()
+        yield
+        session.execute(text("DROP TABLE IF EXISTS scene_ranges"))
+        session.commit()
+
+    def _insert_scene(
+        self,
+        session,
+        artifact_id: str,
+        asset_id: str,
+        scene_index: int,
+        start_ms: int,
+        end_ms: int,
+    ):
+        """Helper to insert scene into scene_ranges table."""
+        session.execute(
+            text(
+                """
+                INSERT INTO scene_ranges
+                    (artifact_id, asset_id, scene_index, start_ms, end_ms)
+                VALUES (:artifact_id, :asset_id, :scene_index, :start_ms, :end_ms)
+                """
+            ),
+            {
+                "artifact_id": artifact_id,
+                "asset_id": asset_id,
+                "scene_index": scene_index,
+                "start_ms": start_ms,
+                "end_ms": end_ms,
+            },
+        )
+        session.commit()
+
+    def test_jump_prev_scene_routes_correctly(
+        self, session, global_jump_service, setup_scene_ranges
+    ):
+        """Test that kind='scene' routes to scene search with prev direction."""
+        video = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        self._insert_scene(session, "scene_1", video.video_id, 0, 100, 5000)
+        self._insert_scene(session, "scene_2", video.video_id, 1, 5000, 10000)
+
+        results = global_jump_service.jump_prev(
+            kind="scene",
+            from_video_id=video.video_id,
+            from_ms=8000,
+        )
+
+        assert len(results) == 1
+        assert results[0].artifact_id == "scene_2"
+
+
+class TestJumpPrevPlace:
+    """Tests for jump_prev() with kind='place'."""
+
+    def test_jump_prev_place_routes_correctly(self, session, global_jump_service):
+        """Test that kind='place' routes to place search with prev direction."""
+        video = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        create_object_label(session, "place_1", video.video_id, "gym", 0.9, 100, 200)
+        create_object_label(session, "place_2", video.video_id, "gym", 0.8, 500, 600)
+
+        results = global_jump_service.jump_prev(
+            kind="place",
+            from_video_id=video.video_id,
+            from_ms=400,
+            label="gym",
+        )
+
+        assert len(results) == 1
+        assert results[0].artifact_id == "place_1"

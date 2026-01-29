@@ -15,7 +15,7 @@ from typing import Literal
 from sqlalchemy import and_, or_, text
 from sqlalchemy.orm import Session
 
-from ..database.models import ObjectLabel
+from ..database.models import ObjectLabel, SceneRange
 from ..database.models import Video as VideoEntity
 from ..domain.exceptions import InvalidParameterError, VideoNotFoundError
 from ..domain.models import GlobalJumpResult, JumpTo
@@ -1003,6 +1003,212 @@ class GlobalJumpService:
 
         return results
 
+    def _search_scenes_global(
+        self,
+        direction: Literal["next", "prev"],
+        from_video_id: str,
+        from_ms: int,
+        limit: int = 1,
+    ) -> list[GlobalJumpResult]:
+        """Search for scene boundaries across all videos in global timeline order.
+
+        Queries the scene_ranges projection table joined with videos to find
+        scene boundaries in chronological order based on the global timeline.
+
+        Args:
+            direction: Navigation direction ("next" for forward, "prev" for backward).
+            from_video_id: Starting video ID for the search.
+            from_ms: Starting timestamp in milliseconds within the video.
+            limit: Maximum number of results to return (default 1).
+
+        Returns:
+            List of GlobalJumpResult objects ordered by global timeline.
+            For "next": ascending order (chronologically after current position).
+            For "prev": descending order (chronologically before current position).
+            Empty list if no scene boundaries are found.
+
+        Raises:
+            VideoNotFoundError: If from_video_id does not exist.
+        """
+        # Get the current video to determine its position in the global timeline
+        current_video = self._get_video(from_video_id)
+        current_file_created_at = current_video.file_created_at
+
+        # Build base query joining scene_ranges with videos
+        query = self.session.query(
+            SceneRange.artifact_id,
+            SceneRange.asset_id,
+            SceneRange.scene_index,
+            SceneRange.start_ms,
+            SceneRange.end_ms,
+            VideoEntity.filename,
+            VideoEntity.file_created_at,
+        ).join(VideoEntity, VideoEntity.video_id == SceneRange.asset_id)
+
+        # Apply direction-specific WHERE clause
+        if direction == "next":
+            if current_file_created_at is not None:
+                query = query.filter(
+                    or_(
+                        # Case 1: Videos with later file_created_at
+                        VideoEntity.file_created_at > current_file_created_at,
+                        # Case 2: Videos with NULL file_created_at (sorted after)
+                        VideoEntity.file_created_at.is_(None),
+                        # Case 3: Same file_created_at, later video_id
+                        and_(
+                            VideoEntity.file_created_at == current_file_created_at,
+                            VideoEntity.video_id > from_video_id,
+                        ),
+                        # Case 4: Same video, later start_ms
+                        and_(
+                            VideoEntity.file_created_at == current_file_created_at,
+                            VideoEntity.video_id == from_video_id,
+                            SceneRange.start_ms > from_ms,
+                        ),
+                    )
+                )
+            else:
+                query = query.filter(
+                    or_(
+                        and_(
+                            VideoEntity.file_created_at.is_(None),
+                            VideoEntity.video_id > from_video_id,
+                        ),
+                        and_(
+                            VideoEntity.file_created_at.is_(None),
+                            VideoEntity.video_id == from_video_id,
+                            SceneRange.start_ms > from_ms,
+                        ),
+                    )
+                )
+
+            # Order by global timeline (ascending for "next")
+            query = query.order_by(
+                VideoEntity.file_created_at.asc().nulls_last(),
+                VideoEntity.video_id.asc(),
+                SceneRange.start_ms.asc(),
+            )
+
+        elif direction == "prev":
+            if current_file_created_at is not None:
+                query = query.filter(
+                    or_(
+                        # Case 1: Videos with earlier file_created_at
+                        and_(
+                            VideoEntity.file_created_at.is_not(None),
+                            VideoEntity.file_created_at < current_file_created_at,
+                        ),
+                        # Case 2: Same file_created_at, earlier video_id
+                        and_(
+                            VideoEntity.file_created_at == current_file_created_at,
+                            VideoEntity.video_id < from_video_id,
+                        ),
+                        # Case 3: Same video, earlier start_ms
+                        and_(
+                            VideoEntity.file_created_at == current_file_created_at,
+                            VideoEntity.video_id == from_video_id,
+                            SceneRange.start_ms < from_ms,
+                        ),
+                    )
+                )
+            else:
+                query = query.filter(
+                    or_(
+                        VideoEntity.file_created_at.is_not(None),
+                        and_(
+                            VideoEntity.file_created_at.is_(None),
+                            VideoEntity.video_id < from_video_id,
+                        ),
+                        and_(
+                            VideoEntity.file_created_at.is_(None),
+                            VideoEntity.video_id == from_video_id,
+                            SceneRange.start_ms < from_ms,
+                        ),
+                    )
+                )
+
+            # Order by global timeline (descending for "prev")
+            query = query.order_by(
+                VideoEntity.file_created_at.desc().nulls_last(),
+                VideoEntity.video_id.desc(),
+                SceneRange.start_ms.desc(),
+            )
+
+        # Apply limit
+        query = query.limit(limit)
+
+        # Execute query and convert results to GlobalJumpResult objects
+        results = []
+        for row in query.all():
+            result = self._to_global_result(
+                video_id=row.asset_id,
+                video_filename=row.filename,
+                file_created_at=row.file_created_at,
+                start_ms=row.start_ms,
+                end_ms=row.end_ms,
+                artifact_id=row.artifact_id,
+                preview={
+                    "scene_index": row.scene_index,
+                },
+            )
+            results.append(result)
+
+        logger.debug(
+            f"_search_scenes_global: direction={direction}, "
+            f"from_video_id={from_video_id}, from_ms={from_ms}, "
+            f"found {len(results)} results"
+        )
+
+        return results
+
+    def _search_places_global(
+        self,
+        direction: Literal["next", "prev"],
+        from_video_id: str,
+        from_ms: int,
+        label: str | None = None,
+        min_confidence: float | None = None,
+        limit: int = 1,
+    ) -> list[GlobalJumpResult]:
+        """Search for place classifications across all videos in global timeline order.
+
+        Place classifications are stored in the object_labels projection table
+        with place-specific labels (e.g., "kitchen", "beach", "office").
+        This method queries object_labels with place-related filters.
+
+        Args:
+            direction: Navigation direction ("next" for forward, "prev" for backward).
+            from_video_id: Starting video ID for the search.
+            from_ms: Starting timestamp in milliseconds within the video.
+            label: Optional place label filter (e.g., "kitchen", "beach").
+            min_confidence: Optional minimum confidence threshold (0-1).
+            limit: Maximum number of results to return (default 1).
+
+        Returns:
+            List of GlobalJumpResult objects ordered by global timeline.
+            For "next": ascending order (chronologically after current position).
+            For "prev": descending order (chronologically before current position).
+            Empty list if no matching places are found.
+
+        Raises:
+            VideoNotFoundError: If from_video_id does not exist.
+
+        Note:
+            Place classifications are stored in object_labels with labels from
+            the Places365 dataset. This method reuses the object search logic
+            but is semantically distinct for place-based navigation.
+        """
+        # Place search uses the same underlying table as object search
+        # but is semantically distinct for place-based navigation
+        return self._search_objects_global(
+            direction=direction,
+            from_video_id=from_video_id,
+            from_ms=from_ms,
+            label=label,
+            min_confidence=min_confidence,
+            limit=limit,
+        )
+
     # Valid artifact kinds for global jump navigation
     VALID_KINDS = {"object", "face", "transcript", "ocr", "scene", "place", "location"}
 
@@ -1092,13 +1298,21 @@ class GlobalJumpService:
                 limit=limit,
             )
         elif kind == "scene":
-            # Scene search not yet implemented
-            # Will be implemented in task 11
-            raise InvalidParameterError("kind", "Scene search is not yet implemented")
+            return self._search_scenes_global(
+                direction="next",
+                from_video_id=from_video_id,
+                from_ms=from_ms,
+                limit=limit,
+            )
         elif kind == "place":
-            # Place search not yet implemented
-            # Will be implemented in task 11
-            raise InvalidParameterError("kind", "Place search is not yet implemented")
+            return self._search_places_global(
+                direction="next",
+                from_video_id=from_video_id,
+                from_ms=from_ms,
+                label=label,
+                min_confidence=min_confidence,
+                limit=limit,
+            )
         elif kind == "location":
             # Location search not yet implemented
             # Will be implemented in task 12
@@ -1198,13 +1412,21 @@ class GlobalJumpService:
                 limit=limit,
             )
         elif kind == "scene":
-            # Scene search not yet implemented
-            # Will be implemented in task 11
-            raise InvalidParameterError("kind", "Scene search is not yet implemented")
+            return self._search_scenes_global(
+                direction="prev",
+                from_video_id=from_video_id,
+                from_ms=from_ms,
+                limit=limit,
+            )
         elif kind == "place":
-            # Place search not yet implemented
-            # Will be implemented in task 11
-            raise InvalidParameterError("kind", "Place search is not yet implemented")
+            return self._search_places_global(
+                direction="prev",
+                from_video_id=from_video_id,
+                from_ms=from_ms,
+                label=label,
+                min_confidence=min_confidence,
+                limit=limit,
+            )
         elif kind == "location":
             # Location search not yet implemented
             # Will be implemented in task 12
