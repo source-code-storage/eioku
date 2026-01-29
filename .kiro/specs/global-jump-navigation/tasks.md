@@ -89,7 +89,7 @@ The implementation follows a bottom-up approach: start with data models and serv
   - Verify confidence filtering
   - _Requirements: 2.1, 2.2, 2.4_
 
-- [ ] 7. Implement transcript full-text search in GlobalJumpService
+- [x] 7. Implement transcript full-text search in GlobalJumpService
   - Implement _search_transcript_global() method for both "next" and "prev" directions
   - Build query on transcript_fts projection table joined with videos
   - Use PostgreSQL plainto_tsquery for text normalization

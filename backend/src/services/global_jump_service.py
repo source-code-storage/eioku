@@ -12,7 +12,7 @@ without requiring new data structures.
 import logging
 from typing import Literal
 
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, text
 from sqlalchemy.orm import Session
 
 from ..database.models import ObjectLabel
@@ -299,6 +299,351 @@ class GlobalJumpService:
             f"from_video_id={from_video_id}, from_ms={from_ms}, "
             f"label={label}, min_confidence={min_confidence}, "
             f"found {len(results)} results"
+        )
+
+        return results
+
+    def _search_transcript_global(
+        self,
+        direction: Literal["next", "prev"],
+        from_video_id: str,
+        from_ms: int,
+        query: str,
+        limit: int = 1,
+    ) -> list[GlobalJumpResult]:
+        """Search for transcript text across all videos in global timeline order.
+
+        Queries the transcript_fts projection table joined with videos to find
+        matching transcript segments using PostgreSQL full-text search. Results
+        are ordered by the global timeline.
+
+        Args:
+            direction: Navigation direction ("next" or "prev").
+            from_video_id: Starting video ID for the search.
+            from_ms: Starting timestamp in milliseconds within the video.
+            query: Text query to search for in transcripts.
+            limit: Maximum number of results to return (default 1).
+
+        Returns:
+            List of GlobalJumpResult objects ordered by global timeline.
+            For "next": ascending order (chronologically after current position).
+            For "prev": descending order (chronologically before current position).
+            Empty list if no matching transcript segments are found.
+
+        Raises:
+            VideoNotFoundError: If from_video_id does not exist.
+        """
+        # Get the current video to determine its position in the global timeline
+        current_video = self._get_video(from_video_id)
+        current_file_created_at = current_video.file_created_at
+
+        # Determine database dialect
+        bind = self.session.bind
+        is_postgresql = bind.dialect.name == "postgresql"
+
+        if is_postgresql:
+            return self._search_transcript_global_postgresql(
+                direction, from_video_id, from_ms, query, limit, current_file_created_at
+            )
+        else:
+            return self._search_transcript_global_sqlite(
+                direction, from_video_id, from_ms, query, limit, current_file_created_at
+            )
+
+    def _search_transcript_global_postgresql(
+        self,
+        direction: Literal["next", "prev"],
+        from_video_id: str,
+        from_ms: int,
+        query: str,
+        limit: int,
+        current_file_created_at,
+    ) -> list[GlobalJumpResult]:
+        """PostgreSQL implementation of transcript global search."""
+        # Build direction-specific SQL components
+        if direction == "next":
+            order_clause = """
+                ORDER BY v.file_created_at ASC NULLS LAST,
+                         v.video_id ASC,
+                         t.start_ms ASC
+            """
+            if current_file_created_at is not None:
+                direction_clause = """
+                    AND (
+                        v.file_created_at > :current_file_created_at
+                        OR v.file_created_at IS NULL
+                        OR (v.file_created_at = :current_file_created_at
+                            AND v.video_id > :from_video_id)
+                        OR (v.file_created_at = :current_file_created_at
+                            AND v.video_id = :from_video_id
+                            AND t.start_ms > :from_ms)
+                    )
+                """
+            else:
+                direction_clause = """
+                    AND (
+                        (v.file_created_at IS NULL
+                         AND v.video_id > :from_video_id)
+                        OR (v.file_created_at IS NULL
+                            AND v.video_id = :from_video_id
+                            AND t.start_ms > :from_ms)
+                    )
+                """
+        else:  # direction == "prev"
+            order_clause = """
+                ORDER BY v.file_created_at DESC NULLS LAST,
+                         v.video_id DESC,
+                         t.start_ms DESC
+            """
+            if current_file_created_at is not None:
+                direction_clause = """
+                    AND (
+                        (v.file_created_at IS NOT NULL
+                         AND v.file_created_at < :current_file_created_at)
+                        OR (v.file_created_at = :current_file_created_at
+                            AND v.video_id < :from_video_id)
+                        OR (v.file_created_at = :current_file_created_at
+                            AND v.video_id = :from_video_id
+                            AND t.start_ms < :from_ms)
+                    )
+                """
+            else:
+                direction_clause = """
+                    AND (
+                        v.file_created_at IS NOT NULL
+                        OR (v.file_created_at IS NULL
+                            AND v.video_id < :from_video_id)
+                        OR (v.file_created_at IS NULL
+                            AND v.video_id = :from_video_id
+                            AND t.start_ms < :from_ms)
+                    )
+                """
+
+        # PostgreSQL: Use tsvector and tsquery with plainto_tsquery
+        sql = text(
+            f"""
+            SELECT
+                t.artifact_id,
+                t.asset_id,
+                t.start_ms,
+                t.end_ms,
+                t.text,
+                v.filename,
+                v.file_created_at
+            FROM transcript_fts t
+            JOIN videos v ON v.video_id = t.asset_id
+            WHERE t.text_tsv @@ plainto_tsquery('english', :query)
+            {direction_clause}
+            {order_clause}
+            LIMIT :limit
+            """
+        )
+
+        params = {
+            "query": query,
+            "from_video_id": from_video_id,
+            "from_ms": from_ms,
+            "limit": limit,
+        }
+        if current_file_created_at is not None:
+            params["current_file_created_at"] = current_file_created_at
+
+        rows = self.session.execute(sql, params).fetchall()
+
+        # If FTS returned no results, try case-insensitive LIKE search
+        if not rows:
+            sql_fallback = text(
+                f"""
+                SELECT
+                    t.artifact_id,
+                    t.asset_id,
+                    t.start_ms,
+                    t.end_ms,
+                    t.text,
+                    v.filename,
+                    v.file_created_at
+                FROM transcript_fts t
+                JOIN videos v ON v.video_id = t.asset_id
+                WHERE t.text ILIKE :query_like
+                {direction_clause}
+                {order_clause}
+                LIMIT :limit
+                """
+            )
+
+            params["query_like"] = f"%{query}%"
+            rows = self.session.execute(sql_fallback, params).fetchall()
+
+        # Convert results to GlobalJumpResult objects
+        results = []
+        for row in rows:
+            result = self._to_global_result(
+                video_id=row.asset_id,
+                video_filename=row.filename,
+                file_created_at=row.file_created_at,
+                start_ms=row.start_ms,
+                end_ms=row.end_ms,
+                artifact_id=row.artifact_id,
+                preview={"text": row.text},
+            )
+            results.append(result)
+
+        logger.debug(
+            f"_search_transcript_global: direction={direction}, "
+            f"from_video_id={from_video_id}, from_ms={from_ms}, "
+            f"query={query}, found {len(results)} results"
+        )
+
+        return results
+
+    def _search_transcript_global_sqlite(
+        self,
+        direction: Literal["next", "prev"],
+        from_video_id: str,
+        from_ms: int,
+        query: str,
+        limit: int,
+        current_file_created_at,
+    ) -> list[GlobalJumpResult]:
+        """SQLite implementation of transcript global search using FTS5."""
+        # SQLite: Use FTS5 MATCH syntax
+        # First get matching artifact_ids from FTS5 table
+        fts_sql = text(
+            """
+            SELECT artifact_id, text
+            FROM transcript_fts
+            WHERE transcript_fts MATCH :query
+            """
+        )
+
+        fts_rows = self.session.execute(fts_sql, {"query": query}).fetchall()
+
+        if not fts_rows:
+            return []
+
+        # Get artifact_ids and text snippets
+        artifact_ids = [row.artifact_id for row in fts_rows]
+        text_map = {row.artifact_id: row.text for row in fts_rows}
+
+        # Build placeholders for IN clause
+        placeholders = ",".join([f":id{i}" for i in range(len(artifact_ids))])
+
+        # Convert datetime to string for SQLite comparison
+        current_file_created_at_str = None
+        if current_file_created_at is not None:
+            current_file_created_at_str = current_file_created_at.strftime(
+                "%Y-%m-%d %H:%M:%S.%f"
+            )
+
+        # Build direction-specific SQL for SQLite (no NULLS LAST support)
+        if direction == "next":
+            # SQLite: Use CASE to handle NULL ordering (NULLs last)
+            order_clause = """
+                ORDER BY CASE WHEN v.file_created_at IS NULL THEN 1 ELSE 0 END,
+                         v.file_created_at ASC,
+                         v.video_id ASC,
+                         m.start_ms ASC
+            """
+            if current_file_created_at_str is not None:
+                direction_clause = """
+                    AND (
+                        v.file_created_at > :current_file_created_at
+                        OR v.file_created_at IS NULL
+                        OR (v.file_created_at = :current_file_created_at
+                            AND v.video_id > :from_video_id)
+                        OR (v.file_created_at = :current_file_created_at
+                            AND v.video_id = :from_video_id
+                            AND m.start_ms > :from_ms)
+                    )
+                """
+            else:
+                direction_clause = """
+                    AND (
+                        (v.file_created_at IS NULL
+                         AND v.video_id > :from_video_id)
+                        OR (v.file_created_at IS NULL
+                            AND v.video_id = :from_video_id
+                            AND m.start_ms > :from_ms)
+                    )
+                """
+        else:  # direction == "prev"
+            # SQLite: Use CASE to handle NULL ordering (NULLs last in DESC)
+            order_clause = """
+                ORDER BY CASE WHEN v.file_created_at IS NULL THEN 1 ELSE 0 END,
+                         v.file_created_at DESC,
+                         v.video_id DESC,
+                         m.start_ms DESC
+            """
+            if current_file_created_at_str is not None:
+                direction_clause = """
+                    AND (
+                        (v.file_created_at IS NOT NULL
+                         AND v.file_created_at < :current_file_created_at)
+                        OR (v.file_created_at = :current_file_created_at
+                            AND v.video_id < :from_video_id)
+                        OR (v.file_created_at = :current_file_created_at
+                            AND v.video_id = :from_video_id
+                            AND m.start_ms < :from_ms)
+                    )
+                """
+            else:
+                direction_clause = """
+                    AND (
+                        v.file_created_at IS NOT NULL
+                        OR (v.file_created_at IS NULL
+                            AND v.video_id < :from_video_id)
+                        OR (v.file_created_at IS NULL
+                            AND v.video_id = :from_video_id
+                            AND m.start_ms < :from_ms)
+                    )
+                """
+
+        # Get metadata with video info and apply direction filter
+        metadata_sql = text(
+            f"""
+            SELECT
+                m.artifact_id,
+                m.asset_id,
+                m.start_ms,
+                m.end_ms,
+                v.filename,
+                v.file_created_at
+            FROM transcript_fts_metadata m
+            JOIN videos v ON v.video_id = m.asset_id
+            WHERE m.artifact_id IN ({placeholders})
+            {direction_clause}
+            {order_clause}
+            LIMIT :limit
+            """
+        )
+
+        params = {f"id{i}": aid for i, aid in enumerate(artifact_ids)}
+        params["from_video_id"] = from_video_id
+        params["from_ms"] = from_ms
+        params["limit"] = limit
+        if current_file_created_at_str is not None:
+            params["current_file_created_at"] = current_file_created_at_str
+
+        rows = self.session.execute(metadata_sql, params).fetchall()
+
+        # Convert to results with text from FTS
+        results = []
+        for row in rows:
+            result = self._to_global_result(
+                video_id=row.asset_id,
+                video_filename=row.filename,
+                file_created_at=row.file_created_at,
+                start_ms=row.start_ms,
+                end_ms=row.end_ms,
+                artifact_id=row.artifact_id,
+                preview={"text": text_map.get(row.artifact_id, "")},
+            )
+            results.append(result)
+
+        logger.debug(
+            f"_search_transcript_global: direction={direction}, "
+            f"from_video_id={from_video_id}, from_ms={from_ms}, "
+            f"query={query}, found {len(results)} results"
         )
 
         return results
