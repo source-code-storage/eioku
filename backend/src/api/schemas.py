@@ -159,3 +159,79 @@ class LocationInfoSchema(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# Global Jump Navigation Schemas
+
+
+class GlobalJumpResultSchema(BaseModel):
+    """Schema for a single global jump navigation result.
+
+    Represents a single artifact occurrence across the video library,
+    including video metadata and temporal boundaries for navigation.
+    """
+
+    video_id: str = Field(
+        ...,
+        description="Unique identifier of the video containing the artifact",
+        examples=["abc-123"],
+    )
+    video_filename: str = Field(
+        ...,
+        description="Filename of the video for display purposes",
+        examples=["beach_trip.mp4"],
+    )
+    file_created_at: datetime | None = Field(
+        None,
+        description=(
+            "EXIF/filesystem creation date of the video, used for global "
+            "timeline ordering. May be None if not available."
+        ),
+        examples=["2025-05-19T02:22:21Z"],
+    )
+    jump_to: JumpToSchema = Field(
+        ...,
+        description=(
+            "Temporal boundaries (start_ms, end_ms) for navigating to the artifact"
+        ),
+    )
+    artifact_id: str = Field(
+        ...,
+        description="Unique identifier of the specific artifact occurrence",
+        examples=["artifact_xyz"],
+    )
+    preview: dict = Field(
+        ...,
+        description=(
+            "Kind-specific preview data. For objects: {label, confidence}. "
+            "For faces: {cluster_id, confidence}. For transcript/OCR: {text}. "
+            "For scenes: {scene_index}."
+        ),
+        examples=[{"label": "dog", "confidence": 0.95}],
+    )
+
+    class Config:
+        from_attributes = True
+
+
+class GlobalJumpResponseSchema(BaseModel):
+    """Schema for the global jump navigation API response.
+
+    Contains the list of matching results and pagination information.
+    Results are ordered by the global timeline (file_created_at, video_id, start_ms).
+    """
+
+    results: list[GlobalJumpResultSchema] = Field(
+        ...,
+        description=(
+            "List of matching artifacts ordered by global timeline "
+            "(file_created_at, video_id, start_ms)"
+        ),
+    )
+    has_more: bool = Field(
+        ...,
+        description=(
+            "Indicates whether additional results exist beyond the requested "
+            "limit. True if more results are available, False otherwise."
+        ),
+    )

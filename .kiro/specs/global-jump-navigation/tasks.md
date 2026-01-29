@@ -27,7 +27,7 @@ The implementation follows a bottom-up approach: start with data models and serv
   - **Property 12: Response Schema Completeness**
   - **Validates: Requirements 5.3, 7.1, 7.2, 7.3, 7.4, 7.5, 13.1**
 
-- [ ] 3. Implement GlobalJumpService - core infrastructure
+- [x] 3. Implement GlobalJumpService - core infrastructure
   - Create `backend/src/global_jump/service.py`
   - Implement GlobalJumpService class with __init__ method accepting session and artifact_repo
   - Implement _get_video() helper method to fetch video by ID and raise VideoNotFoundError if not found

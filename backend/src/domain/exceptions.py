@@ -1,4 +1,4 @@
-"""Exceptions for Global Jump Navigation."""
+"""Domain exceptions for the application."""
 
 
 class GlobalJumpError(Exception):
