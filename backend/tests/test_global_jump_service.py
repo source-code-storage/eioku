@@ -8,7 +8,7 @@ from sqlalchemy.orm import sessionmaker
 
 from src.database.models import Base, ObjectLabel
 from src.database.models import Video as VideoEntity
-from src.domain.exceptions import VideoNotFoundError
+from src.domain.exceptions import InvalidParameterError, VideoNotFoundError
 from src.services.global_jump_service import GlobalJumpService
 
 
@@ -1405,3 +1405,138 @@ class TestSearchOcrGlobalPrev:
         )
 
         assert len(results) == 0
+
+
+class TestJumpNext:
+    """Tests for jump_next() public method."""
+
+    def test_jump_next_object_routes_correctly(self, session, global_jump_service):
+        """Test that kind='object' routes to object search."""
+        video = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        create_object_label(session, "obj_1", video.video_id, "dog", 0.9, 100, 200)
+
+        results = global_jump_service.jump_next(
+            kind="object",
+            from_video_id=video.video_id,
+            from_ms=0,
+            label="dog",
+        )
+
+        assert len(results) == 1
+        assert results[0].artifact_id == "obj_1"
+        assert results[0].preview["label"] == "dog"
+
+    def test_jump_next_invalid_kind_raises_error(self, session, global_jump_service):
+        """Test that invalid kind raises InvalidParameterError."""
+        video = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+
+        with pytest.raises(InvalidParameterError) as exc_info:
+            global_jump_service.jump_next(
+                kind="invalid_kind",
+                from_video_id=video.video_id,
+                from_ms=0,
+            )
+
+        assert exc_info.value.parameter == "kind"
+        assert "Invalid artifact kind" in exc_info.value.message
+
+    def test_jump_next_transcript_requires_query(self, session, global_jump_service):
+        """Test that transcript search requires query parameter."""
+        video = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+
+        with pytest.raises(InvalidParameterError) as exc_info:
+            global_jump_service.jump_next(
+                kind="transcript",
+                from_video_id=video.video_id,
+                from_ms=0,
+            )
+
+        assert exc_info.value.parameter == "query"
+
+    def test_jump_next_ocr_requires_query(self, session, global_jump_service):
+        """Test that OCR search requires query parameter."""
+        video = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+
+        with pytest.raises(InvalidParameterError) as exc_info:
+            global_jump_service.jump_next(
+                kind="ocr",
+                from_video_id=video.video_id,
+                from_ms=0,
+            )
+
+        assert exc_info.value.parameter == "query"
+
+    def test_jump_next_default_from_ms(self, session, global_jump_service):
+        """Test that from_ms defaults to 0 when not provided."""
+        video = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        create_object_label(session, "obj_1", video.video_id, "cat", 0.9, 100, 200)
+
+        # Call without from_ms - should default to 0 and find the object
+        results = global_jump_service.jump_next(
+            kind="object",
+            from_video_id=video.video_id,
+            label="cat",
+        )
+
+        assert len(results) == 1
+        assert results[0].artifact_id == "obj_1"
+
+    def test_jump_next_video_not_found(self, session, global_jump_service):
+        """Test that VideoNotFoundError is raised for non-existent video."""
+        with pytest.raises(VideoNotFoundError) as exc_info:
+            global_jump_service.jump_next(
+                kind="object",
+                from_video_id="non_existent_video",
+                from_ms=0,
+            )
+
+        assert exc_info.value.video_id == "non_existent_video"
+
+    def test_jump_next_with_limit(self, session, global_jump_service):
+        """Test that limit parameter is respected."""
+        video = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        for i in range(5):
+            create_object_label(
+                session, f"obj_{i}", video.video_id, "bird", 0.9, i * 100, i * 100 + 50
+            )
+
+        results = global_jump_service.jump_next(
+            kind="object",
+            from_video_id=video.video_id,
+            from_ms=0,
+            label="bird",
+            limit=3,
+        )
+
+        assert len(results) == 3
+
+    def test_jump_next_with_min_confidence(self, session, global_jump_service):
+        """Test that min_confidence filter is applied."""
+        video = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        create_object_label(session, "obj_1", video.video_id, "car", 0.5, 100, 200)
+        create_object_label(session, "obj_2", video.video_id, "car", 0.9, 200, 300)
+
+        results = global_jump_service.jump_next(
+            kind="object",
+            from_video_id=video.video_id,
+            from_ms=0,
+            label="car",
+            min_confidence=0.8,
+        )
+
+        assert len(results) == 1
+        assert results[0].artifact_id == "obj_2"
