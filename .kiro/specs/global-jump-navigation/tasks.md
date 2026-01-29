@@ -15,7 +15,7 @@ The implementation follows a bottom-up approach: start with data models and serv
   - Create `backend/src/global_jump/exceptions.py` with GlobalJumpException, VideoNotFoundError, InvalidParameterError
   - _Requirements: 5.1, 8.1, 8.2, 8.3, 8.4_
 
-- [ ] 2. Create Pydantic response schemas
+- [x] 2. Create Pydantic response schemas
   - Create `backend/src/global_jump/schemas.py`
   - Implement JumpToSchema with start_ms and end_ms fields
   - Implement GlobalJumpResultSchema with all required fields (video_id, video_filename, file_created_at, jump_to, artifact_id, preview)

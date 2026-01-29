@@ -2,6 +2,7 @@
 
 from .exceptions import GlobalJumpError, InvalidParameterError, VideoNotFoundError
 from .models import GlobalJumpResult, JumpTo
+from .schemas import GlobalJumpResponseSchema, GlobalJumpResultSchema, JumpToSchema
 
 __all__ = [
     "GlobalJumpResult",
@@ -9,4 +10,7 @@ __all__ = [
     "GlobalJumpError",
     "VideoNotFoundError",
     "InvalidParameterError",
+    "JumpToSchema",
+    "GlobalJumpResultSchema",
+    "GlobalJumpResponseSchema",
 ]
