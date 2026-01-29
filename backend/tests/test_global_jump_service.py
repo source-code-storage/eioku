@@ -323,3 +323,238 @@ class TestSearchObjectsGlobalNext:
         assert result.jump_to.end_ms == 200
         assert result.artifact_id == "obj_1"
         assert result.preview == {"label": "dog", "confidence": 0.95}
+
+
+class TestSearchObjectsGlobalPrev:
+    """Tests for _search_objects_global with direction='prev'."""
+
+    def test_search_objects_prev_single_video(self, session, global_jump_service):
+        """Test searching for previous object within the same video."""
+        video = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        create_object_label(session, "obj_1", video.video_id, "dog", 0.9, 0, 100)
+        create_object_label(session, "obj_2", video.video_id, "dog", 0.85, 500, 600)
+        create_object_label(session, "obj_3", video.video_id, "dog", 0.95, 1000, 1100)
+
+        results = global_jump_service._search_objects_global(
+            direction="prev",
+            from_video_id=video.video_id,
+            from_ms=800,
+            label="dog",
+        )
+
+        assert len(results) == 1
+        assert results[0].artifact_id == "obj_2"
+        assert results[0].jump_to.start_ms == 500
+        assert results[0].preview["label"] == "dog"
+
+    def test_search_objects_prev_cross_video(self, session, global_jump_service):
+        """Test searching for previous object across multiple videos."""
+        video1 = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        video2 = create_test_video(
+            session, "video_2", "video2.mp4", datetime(2025, 1, 2, 12, 0, 0)
+        )
+
+        create_object_label(session, "obj_1", video1.video_id, "cat", 0.9, 500, 600)
+        create_object_label(session, "obj_2", video2.video_id, "cat", 0.85, 500, 600)
+
+        # Search from beginning of video2
+        results = global_jump_service._search_objects_global(
+            direction="prev",
+            from_video_id=video2.video_id,
+            from_ms=0,
+            label="cat",
+        )
+
+        assert len(results) == 1
+        assert results[0].video_id == "video_1"
+        assert results[0].artifact_id == "obj_1"
+
+    def test_search_objects_prev_with_label_filter(self, session, global_jump_service):
+        """Test that label filter correctly filters results for prev direction."""
+        video = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        create_object_label(session, "obj_1", video.video_id, "dog", 0.9, 100, 200)
+        create_object_label(session, "obj_2", video.video_id, "cat", 0.9, 200, 300)
+        create_object_label(session, "obj_3", video.video_id, "dog", 0.9, 300, 400)
+
+        results = global_jump_service._search_objects_global(
+            direction="prev",
+            from_video_id=video.video_id,
+            from_ms=250,
+            label="dog",
+        )
+
+        assert len(results) == 1
+        assert results[0].artifact_id == "obj_1"
+        assert results[0].preview["label"] == "dog"
+
+    def test_search_objects_prev_with_confidence_filter(
+        self, session, global_jump_service
+    ):
+        """Test that min_confidence filter correctly filters results for prev."""
+        video = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        create_object_label(session, "obj_1", video.video_id, "dog", 0.9, 100, 200)
+        create_object_label(session, "obj_2", video.video_id, "dog", 0.7, 200, 300)
+        create_object_label(session, "obj_3", video.video_id, "dog", 0.5, 300, 400)
+
+        results = global_jump_service._search_objects_global(
+            direction="prev",
+            from_video_id=video.video_id,
+            from_ms=500,
+            label="dog",
+            min_confidence=0.8,
+        )
+
+        assert len(results) == 1
+        assert results[0].artifact_id == "obj_1"
+        assert results[0].preview["confidence"] == 0.9
+
+    def test_search_objects_prev_ordering(self, session, global_jump_service):
+        """Test that results are ordered by global timeline (descending for prev)."""
+        # Create videos with different file_created_at
+        video1 = create_test_video(
+            session, "video_a", "video_a.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        video2 = create_test_video(
+            session, "video_b", "video_b.mp4", datetime(2025, 1, 2, 12, 0, 0)
+        )
+        video3 = create_test_video(
+            session, "video_c", "video_c.mp4", datetime(2025, 1, 3, 12, 0, 0)
+        )
+
+        create_object_label(session, "obj_1", video1.video_id, "dog", 0.9, 0, 100)
+        create_object_label(session, "obj_2", video2.video_id, "dog", 0.9, 0, 100)
+        create_object_label(session, "obj_3", video3.video_id, "dog", 0.9, 0, 100)
+
+        # Search from video3 - should find video2 first (descending order)
+        results = global_jump_service._search_objects_global(
+            direction="prev",
+            from_video_id=video3.video_id,
+            from_ms=0,
+            label="dog",
+            limit=3,
+        )
+
+        assert len(results) == 2
+        # Should be ordered by file_created_at descending
+        assert results[0].video_id == "video_b"
+        assert results[1].video_id == "video_a"
+
+    def test_search_objects_prev_limit(self, session, global_jump_service):
+        """Test that limit parameter restricts results for prev direction."""
+        video = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        for i in range(5):
+            create_object_label(
+                session, f"obj_{i}", video.video_id, "dog", 0.9, i * 100, i * 100 + 50
+            )
+
+        results = global_jump_service._search_objects_global(
+            direction="prev",
+            from_video_id=video.video_id,
+            from_ms=500,
+            label="dog",
+            limit=2,
+        )
+
+        assert len(results) == 2
+
+    def test_search_objects_prev_no_results(self, session, global_jump_service):
+        """Test that empty list is returned when no matching objects found."""
+        video = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        create_object_label(session, "obj_1", video.video_id, "dog", 0.9, 500, 600)
+
+        results = global_jump_service._search_objects_global(
+            direction="prev",
+            from_video_id=video.video_id,
+            from_ms=100,
+            label="dog",
+        )
+
+        assert len(results) == 0
+
+    def test_search_objects_prev_null_file_created_at(
+        self, session, global_jump_service
+    ):
+        """Test handling of videos with NULL file_created_at for prev direction."""
+        video1 = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        video2 = create_test_video(
+            session,
+            "video_2",
+            "video2.mp4",
+            None,  # NULL file_created_at
+        )
+
+        create_object_label(session, "obj_1", video1.video_id, "dog", 0.9, 0, 100)
+        create_object_label(session, "obj_2", video2.video_id, "dog", 0.9, 0, 100)
+
+        # Search from video2 (NULL) - should find video1 (non-NULL comes before)
+        results = global_jump_service._search_objects_global(
+            direction="prev",
+            from_video_id=video2.video_id,
+            from_ms=0,
+            label="dog",
+        )
+
+        assert len(results) == 1
+        assert results[0].video_id == "video_1"
+
+    def test_search_objects_prev_same_file_created_at_different_video_id(
+        self, session, global_jump_service
+    ):
+        """Test ordering when videos have same file_created_at for prev direction."""
+        same_time = datetime(2025, 1, 1, 12, 0, 0)
+        video1 = create_test_video(session, "video_a", "video_a.mp4", same_time)
+        video2 = create_test_video(session, "video_b", "video_b.mp4", same_time)
+
+        create_object_label(session, "obj_1", video1.video_id, "dog", 0.9, 0, 100)
+        create_object_label(session, "obj_2", video2.video_id, "dog", 0.9, 0, 100)
+
+        # Search from video_b - should find video_a (alphabetically earlier)
+        results = global_jump_service._search_objects_global(
+            direction="prev",
+            from_video_id=video2.video_id,
+            from_ms=0,
+            label="dog",
+        )
+
+        assert len(results) == 1
+        assert results[0].video_id == "video_a"
+
+    def test_search_objects_prev_result_contains_all_fields(
+        self, session, global_jump_service
+    ):
+        """Test that results contain all required fields for prev direction."""
+        video = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        create_object_label(session, "obj_1", video.video_id, "dog", 0.95, 100, 200)
+
+        results = global_jump_service._search_objects_global(
+            direction="prev",
+            from_video_id=video.video_id,
+            from_ms=500,
+            label="dog",
+        )
+
+        assert len(results) == 1
+        result = results[0]
+        assert result.video_id == "video_1"
+        assert result.video_filename == "video1.mp4"
+        assert result.file_created_at == datetime(2025, 1, 1, 12, 0, 0)
+        assert result.jump_to.start_ms == 100
+        assert result.jump_to.end_ms == 200
+        assert result.artifact_id == "obj_1"
+        assert result.preview == {"label": "dog", "confidence": 0.95}

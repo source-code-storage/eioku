@@ -109,7 +109,7 @@ class GlobalJumpService:
 
     def _search_objects_global(
         self,
-        direction: Literal["next"],
+        direction: Literal["next", "prev"],
         from_video_id: str,
         from_ms: int,
         label: str | None = None,
@@ -122,7 +122,7 @@ class GlobalJumpService:
         matching objects in chronological order based on the global timeline.
 
         Args:
-            direction: Navigation direction ("next" for forward in timeline).
+            direction: Navigation direction ("next" for forward, "prev" for backward).
             from_video_id: Starting video ID for the search.
             from_ms: Starting timestamp in milliseconds within the video.
             label: Optional label filter to match specific object types.
@@ -131,6 +131,8 @@ class GlobalJumpService:
 
         Returns:
             List of GlobalJumpResult objects ordered by global timeline.
+            For "next": ascending order (chronologically after current position).
+            For "prev": descending order (chronologically before current position).
             Empty list if no matching objects are found.
 
         Raises:
@@ -211,6 +213,65 @@ class GlobalJumpService:
                 VideoEntity.file_created_at.asc().nulls_last(),
                 VideoEntity.video_id.asc(),
                 ObjectLabel.start_ms.asc(),
+            )
+
+        elif direction == "prev":
+            # Apply direction-specific WHERE clause for "prev" direction
+            # Results must be chronologically before the current position
+            # Global timeline ordering: file_created_at > video_id > start_ms
+            if current_file_created_at is not None:
+                query = query.filter(
+                    or_(
+                        # Case 1: Videos with earlier file_created_at
+                        and_(
+                            VideoEntity.file_created_at.is_not(None),
+                            VideoEntity.file_created_at < current_file_created_at,
+                        ),
+                        # Case 2: Same file_created_at, earlier video_id
+                        and_(
+                            VideoEntity.file_created_at == current_file_created_at,
+                            VideoEntity.video_id < from_video_id,
+                        ),
+                        # Case 3: Same video, earlier start_ms
+                        and_(
+                            VideoEntity.file_created_at == current_file_created_at,
+                            VideoEntity.video_id == from_video_id,
+                            ObjectLabel.start_ms < from_ms,
+                        ),
+                    )
+                )
+            else:
+                # Current video has NULL file_created_at
+                # Consider all videos with non-NULL file_created_at (they come
+                # before) and videos with NULL file_created_at that are earlier
+                # in video_id order
+                query = query.filter(
+                    or_(
+                        # Case 1: Videos with non-NULL file_created_at
+                        # (come before NULLs)
+                        VideoEntity.file_created_at.is_not(None),
+                        # Case 2: Same NULL file_created_at, earlier video_id
+                        and_(
+                            VideoEntity.file_created_at.is_(None),
+                            VideoEntity.video_id < from_video_id,
+                        ),
+                        # Case 3: Same video, earlier start_ms
+                        and_(
+                            VideoEntity.file_created_at.is_(None),
+                            VideoEntity.video_id == from_video_id,
+                            ObjectLabel.start_ms < from_ms,
+                        ),
+                    )
+                )
+
+            # Order by global timeline (descending for "prev")
+            # NULLS LAST ensures NULL file_created_at values come last in
+            # descending order (which means they were originally last in
+            # ascending order)
+            query = query.order_by(
+                VideoEntity.file_created_at.desc().nulls_last(),
+                VideoEntity.video_id.desc(),
+                ObjectLabel.start_ms.desc(),
             )
 
         # Apply limit

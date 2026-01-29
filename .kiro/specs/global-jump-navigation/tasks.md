@@ -63,7 +63,7 @@ The implementation follows a bottom-up approach: start with data models and serv
   - **Property 4: Filter Consistency for Labels**
   - **Validates: Requirements 1.1, 1.2**
 
-- [ ] 5. Implement object label search - "prev" direction
+- [x] 5. Implement object label search - "prev" direction
   - Implement _search_objects_global() method for "prev" direction
   - Apply direction-specific WHERE clause for "prev" (before current position)
   - Order by file_created_at DESC, video_id DESC, start_ms DESC
