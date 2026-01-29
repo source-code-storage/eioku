@@ -1001,3 +1001,407 @@ class TestSearchTranscriptGlobalPrev:
         )
 
         assert len(results) == 0
+
+
+class TestSearchOcrGlobalNext:
+    """Tests for _search_ocr_global with direction='next'."""
+
+    @pytest.fixture
+    def setup_ocr_fts(self, session):
+        """Set up ocr_fts table for SQLite testing."""
+        # Create FTS5 virtual table for SQLite
+        session.execute(
+            text(
+                """
+                CREATE VIRTUAL TABLE IF NOT EXISTS ocr_fts USING fts5(
+                    artifact_id UNINDEXED,
+                    asset_id UNINDEXED,
+                    start_ms UNINDEXED,
+                    end_ms UNINDEXED,
+                    text
+                )
+                """
+            )
+        )
+        # Create metadata table for SQLite
+        session.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS ocr_fts_metadata (
+                    artifact_id TEXT PRIMARY KEY,
+                    asset_id TEXT NOT NULL,
+                    start_ms INTEGER NOT NULL,
+                    end_ms INTEGER NOT NULL
+                )
+                """
+            )
+        )
+        session.commit()
+        yield
+        # Cleanup
+        session.execute(text("DROP TABLE IF EXISTS ocr_fts_metadata"))
+        session.execute(text("DROP TABLE IF EXISTS ocr_fts"))
+        session.commit()
+
+    def _insert_ocr(
+        self,
+        session,
+        artifact_id: str,
+        asset_id: str,
+        start_ms: int,
+        end_ms: int,
+        text_content: str,
+    ):
+        """Helper to insert OCR text into FTS tables."""
+        session.execute(
+            text(
+                """
+                INSERT INTO ocr_fts
+                    (artifact_id, asset_id, start_ms, end_ms, text)
+                VALUES (:artifact_id, :asset_id, :start_ms, :end_ms, :text)
+                """
+            ),
+            {
+                "artifact_id": artifact_id,
+                "asset_id": asset_id,
+                "start_ms": start_ms,
+                "end_ms": end_ms,
+                "text": text_content,
+            },
+        )
+        session.execute(
+            text(
+                """
+                INSERT INTO ocr_fts_metadata
+                    (artifact_id, asset_id, start_ms, end_ms)
+                VALUES (:artifact_id, :asset_id, :start_ms, :end_ms)
+                """
+            ),
+            {
+                "artifact_id": artifact_id,
+                "asset_id": asset_id,
+                "start_ms": start_ms,
+                "end_ms": end_ms,
+            },
+        )
+        session.commit()
+
+    def test_search_ocr_next_single_video(
+        self, session, global_jump_service, setup_ocr_fts
+    ):
+        """Test searching for next OCR text within the same video."""
+        video = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        self._insert_ocr(session, "ocr_1", video.video_id, 0, 100, "Welcome Screen")
+        self._insert_ocr(session, "ocr_2", video.video_id, 500, 600, "Welcome Back")
+        self._insert_ocr(session, "ocr_3", video.video_id, 1000, 1100, "Goodbye Screen")
+
+        results = global_jump_service._search_ocr_global(
+            direction="next",
+            from_video_id=video.video_id,
+            from_ms=200,
+            query="Welcome",
+        )
+
+        assert len(results) == 1
+        assert results[0].artifact_id == "ocr_2"
+        assert results[0].jump_to.start_ms == 500
+        assert "Welcome" in results[0].preview["text"]
+
+    def test_search_ocr_next_cross_video(
+        self, session, global_jump_service, setup_ocr_fts
+    ):
+        """Test searching for next OCR text across multiple videos."""
+        video1 = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        video2 = create_test_video(
+            session, "video_2", "video2.mp4", datetime(2025, 1, 2, 12, 0, 0)
+        )
+
+        self._insert_ocr(session, "ocr_1", video1.video_id, 0, 100, "Error Message")
+        self._insert_ocr(session, "ocr_2", video2.video_id, 500, 600, "Error Code 404")
+
+        # Search from end of video1
+        results = global_jump_service._search_ocr_global(
+            direction="next",
+            from_video_id=video1.video_id,
+            from_ms=5000,
+            query="Error",
+        )
+
+        assert len(results) == 1
+        assert results[0].video_id == "video_2"
+        assert results[0].artifact_id == "ocr_2"
+
+    def test_search_ocr_next_ordering(
+        self, session, global_jump_service, setup_ocr_fts
+    ):
+        """Test that results are ordered by global timeline."""
+        video1 = create_test_video(
+            session, "video_a", "video_a.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        video2 = create_test_video(
+            session, "video_b", "video_b.mp4", datetime(2025, 1, 2, 12, 0, 0)
+        )
+        video3 = create_test_video(
+            session, "video_c", "video_c.mp4", datetime(2025, 1, 3, 12, 0, 0)
+        )
+
+        self._insert_ocr(session, "ocr_3", video3.video_id, 0, 100, "Login Button")
+        self._insert_ocr(session, "ocr_1", video1.video_id, 0, 100, "Login Form")
+        self._insert_ocr(session, "ocr_2", video2.video_id, 0, 100, "Login Page")
+
+        results = global_jump_service._search_ocr_global(
+            direction="next",
+            from_video_id=video1.video_id,
+            from_ms=500,
+            query="Login",
+            limit=3,
+        )
+
+        assert len(results) == 2
+        assert results[0].video_id == "video_b"
+        assert results[1].video_id == "video_c"
+
+    def test_search_ocr_next_no_results(
+        self, session, global_jump_service, setup_ocr_fts
+    ):
+        """Test that empty list is returned when no matching OCR text found."""
+        video = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        self._insert_ocr(session, "ocr_1", video.video_id, 0, 100, "Hello World")
+
+        results = global_jump_service._search_ocr_global(
+            direction="next",
+            from_video_id=video.video_id,
+            from_ms=0,
+            query="nonexistent",
+        )
+
+        assert len(results) == 0
+
+    def test_search_ocr_next_video_not_found(
+        self, session, global_jump_service, setup_ocr_fts
+    ):
+        """Test that VideoNotFoundError is raised for non-existent video."""
+        with pytest.raises(VideoNotFoundError) as exc_info:
+            global_jump_service._search_ocr_global(
+                direction="next",
+                from_video_id="non_existent_video",
+                from_ms=0,
+                query="test",
+            )
+
+        assert exc_info.value.video_id == "non_existent_video"
+
+    def test_search_ocr_next_result_contains_all_fields(
+        self, session, global_jump_service, setup_ocr_fts
+    ):
+        """Test that results contain all required fields."""
+        video = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        self._insert_ocr(session, "ocr_1", video.video_id, 100, 200, "Test Label")
+
+        results = global_jump_service._search_ocr_global(
+            direction="next",
+            from_video_id=video.video_id,
+            from_ms=0,
+            query="Test",
+        )
+
+        assert len(results) == 1
+        result = results[0]
+        assert result.video_id == "video_1"
+        assert result.video_filename == "video1.mp4"
+        # SQLite returns datetime as string, PostgreSQL returns datetime object
+        assert result.file_created_at is not None
+        if isinstance(result.file_created_at, str):
+            assert "2025-01-01" in result.file_created_at
+        else:
+            assert result.file_created_at == datetime(2025, 1, 1, 12, 0, 0)
+        assert result.jump_to.start_ms == 100
+        assert result.jump_to.end_ms == 200
+        assert result.artifact_id == "ocr_1"
+        assert "text" in result.preview
+
+
+class TestSearchOcrGlobalPrev:
+    """Tests for _search_ocr_global with direction='prev'."""
+
+    @pytest.fixture
+    def setup_ocr_fts(self, session):
+        """Set up ocr_fts table for SQLite testing."""
+        session.execute(
+            text(
+                """
+                CREATE VIRTUAL TABLE IF NOT EXISTS ocr_fts USING fts5(
+                    artifact_id UNINDEXED,
+                    asset_id UNINDEXED,
+                    start_ms UNINDEXED,
+                    end_ms UNINDEXED,
+                    text
+                )
+                """
+            )
+        )
+        session.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS ocr_fts_metadata (
+                    artifact_id TEXT PRIMARY KEY,
+                    asset_id TEXT NOT NULL,
+                    start_ms INTEGER NOT NULL,
+                    end_ms INTEGER NOT NULL
+                )
+                """
+            )
+        )
+        session.commit()
+        yield
+        session.execute(text("DROP TABLE IF EXISTS ocr_fts_metadata"))
+        session.execute(text("DROP TABLE IF EXISTS ocr_fts"))
+        session.commit()
+
+    def _insert_ocr(
+        self,
+        session,
+        artifact_id: str,
+        asset_id: str,
+        start_ms: int,
+        end_ms: int,
+        text_content: str,
+    ):
+        """Helper to insert OCR text into FTS tables."""
+        session.execute(
+            text(
+                """
+                INSERT INTO ocr_fts
+                    (artifact_id, asset_id, start_ms, end_ms, text)
+                VALUES (:artifact_id, :asset_id, :start_ms, :end_ms, :text)
+                """
+            ),
+            {
+                "artifact_id": artifact_id,
+                "asset_id": asset_id,
+                "start_ms": start_ms,
+                "end_ms": end_ms,
+                "text": text_content,
+            },
+        )
+        session.execute(
+            text(
+                """
+                INSERT INTO ocr_fts_metadata
+                    (artifact_id, asset_id, start_ms, end_ms)
+                VALUES (:artifact_id, :asset_id, :start_ms, :end_ms)
+                """
+            ),
+            {
+                "artifact_id": artifact_id,
+                "asset_id": asset_id,
+                "start_ms": start_ms,
+                "end_ms": end_ms,
+            },
+        )
+        session.commit()
+
+    def test_search_ocr_prev_single_video(
+        self, session, global_jump_service, setup_ocr_fts
+    ):
+        """Test searching for previous OCR text within the same video."""
+        video = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        self._insert_ocr(session, "ocr_1", video.video_id, 0, 100, "Submit Button")
+        self._insert_ocr(session, "ocr_2", video.video_id, 500, 600, "Submit Form")
+        self._insert_ocr(session, "ocr_3", video.video_id, 1000, 1100, "Cancel Button")
+
+        results = global_jump_service._search_ocr_global(
+            direction="prev",
+            from_video_id=video.video_id,
+            from_ms=800,
+            query="Submit",
+        )
+
+        assert len(results) == 1
+        assert results[0].artifact_id == "ocr_2"
+        assert results[0].jump_to.start_ms == 500
+
+    def test_search_ocr_prev_cross_video(
+        self, session, global_jump_service, setup_ocr_fts
+    ):
+        """Test searching for previous OCR text across multiple videos."""
+        video1 = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        video2 = create_test_video(
+            session, "video_2", "video2.mp4", datetime(2025, 1, 2, 12, 0, 0)
+        )
+
+        self._insert_ocr(session, "ocr_1", video1.video_id, 500, 600, "Settings Menu")
+        self._insert_ocr(session, "ocr_2", video2.video_id, 500, 600, "Settings Page")
+
+        # Search from beginning of video2
+        results = global_jump_service._search_ocr_global(
+            direction="prev",
+            from_video_id=video2.video_id,
+            from_ms=0,
+            query="Settings",
+        )
+
+        assert len(results) == 1
+        assert results[0].video_id == "video_1"
+        assert results[0].artifact_id == "ocr_1"
+
+    def test_search_ocr_prev_ordering(
+        self, session, global_jump_service, setup_ocr_fts
+    ):
+        """Test that results are ordered by global timeline (descending)."""
+        video1 = create_test_video(
+            session, "video_a", "video_a.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        video2 = create_test_video(
+            session, "video_b", "video_b.mp4", datetime(2025, 1, 2, 12, 0, 0)
+        )
+        video3 = create_test_video(
+            session, "video_c", "video_c.mp4", datetime(2025, 1, 3, 12, 0, 0)
+        )
+
+        self._insert_ocr(session, "ocr_1", video1.video_id, 0, 100, "Dashboard View")
+        self._insert_ocr(session, "ocr_2", video2.video_id, 0, 100, "Dashboard Stats")
+        self._insert_ocr(session, "ocr_3", video3.video_id, 0, 100, "Dashboard Home")
+
+        results = global_jump_service._search_ocr_global(
+            direction="prev",
+            from_video_id=video3.video_id,
+            from_ms=0,
+            query="Dashboard",
+            limit=3,
+        )
+
+        assert len(results) == 2
+        # Should be ordered by file_created_at descending
+        assert results[0].video_id == "video_b"
+        assert results[1].video_id == "video_a"
+
+    def test_search_ocr_prev_no_results(
+        self, session, global_jump_service, setup_ocr_fts
+    ):
+        """Test that empty list is returned when no matching OCR text found."""
+        video = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        self._insert_ocr(session, "ocr_1", video.video_id, 500, 600, "Hello World")
+
+        results = global_jump_service._search_ocr_global(
+            direction="prev",
+            from_video_id=video.video_id,
+            from_ms=100,
+            query="Hello",
+        )
+
+        assert len(results) == 0

@@ -103,7 +103,7 @@ The implementation follows a bottom-up approach: start with data models and serv
   - **Property 5: Filter Consistency for Text Search**
   - **Validates: Requirements 3.1, 3.2, 4.1, 4.2**
 
-- [ ] 8. Implement OCR full-text search in GlobalJumpService
+- [x] 8. Implement OCR full-text search in GlobalJumpService
   - Implement _search_ocr_global() method for both "next" and "prev" directions
   - Build query on ocr_fts projection table joined with videos
   - Use PostgreSQL plainto_tsquery for text normalization
