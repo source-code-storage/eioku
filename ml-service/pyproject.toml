@@ -1,7 +1,7 @@
 [tool.poetry]
-name = "eioku"
+name = "eioku-ml-service"
 version = "0.1.0"
-description = "Semantic Video Search Platform"
+description = "Eioku ML Service - ML inference job consumer"
 authors = ["Eioku Team <team@eioku.com>"]
 readme = "README.md"
 packages = [{include = "src"}]
@@ -10,24 +10,24 @@ packages = [{include = "src"}]
 python = "^3.10"
 fastapi = "^0.104.1"
 uvicorn = {extras = ["standard"], version = "^0.24.0"}
-sqlalchemy = "^2.0.23"
-alembic = "^1.13.1"
-pyyaml = "^6.0.3"
-gunicorn = "^23.0.0"
-faster-whisper = "^1.2.1"
-openai-whisper = "^20250625"
-xxhash = "^3.6.0"
+pydantic = "^2.0"
+# ML inference dependencies (same as backend)
 ultralytics = "^8.0.0"
-av = "^13.0.0"
-psycopg2-binary = "^2.9.9"
+faster-whisper = "^1.2.1"
 easyocr = "^1.7.0"
+opencv-python = "^4.8.0"
+numpy = "^1.24"
+pillow = "^10.0"
+# Job queue
 arq = "^0.26"
-httpx = "^0.25.2"
+# Database
+psycopg2-binary = "^2.9.9"
 
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.1.6"
 pytest = "^7.4.3"
-pytest-asyncio = "^0.21.0"
+pytest-asyncio = "^0.21.1"
+httpx = "^0.25.2"
 
 [build-system]
 requires = ["poetry-core"]

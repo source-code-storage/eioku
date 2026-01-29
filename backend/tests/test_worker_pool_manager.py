@@ -285,11 +285,9 @@ class TestWorkerPoolManager:
         """Test creating default worker pools."""
         self.manager.create_default_pools()
 
-        # Should have pools for all artifact-based task types
+        # Should have pools for artifact-based task types only
         expected_types = {
             TaskType.HASH,
-            TaskType.TRANSCRIPTION,
-            TaskType.SCENE_DETECTION,
             TaskType.OBJECT_DETECTION,
             TaskType.FACE_DETECTION,
             TaskType.OCR,

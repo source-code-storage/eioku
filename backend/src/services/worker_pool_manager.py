@@ -899,8 +899,6 @@ class WorkerPoolManager:
         """Create default worker pools with balanced configuration."""
         default_configs = [
             WorkerConfig(TaskType.HASH, 4, ResourceType.CPU, 1),
-            WorkerConfig(TaskType.TRANSCRIPTION, 2, ResourceType.CPU, 2),
-            WorkerConfig(TaskType.SCENE_DETECTION, 2, ResourceType.CPU, 3),
             WorkerConfig(TaskType.OBJECT_DETECTION, 2, ResourceType.GPU, 3),
             WorkerConfig(TaskType.FACE_DETECTION, 2, ResourceType.GPU, 3),
             WorkerConfig(TaskType.OCR, 2, ResourceType.GPU, 3),

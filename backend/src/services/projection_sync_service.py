@@ -42,11 +42,11 @@ class ProjectionSyncService:
                 self._sync_object_labels(artifact)
             elif artifact.artifact_type == "face.detection":
                 self._sync_face_clusters(artifact)
-            elif artifact.artifact_type == "ocr.text":
-                self._sync_ocr_fts(artifact)
             # Add more artifact types here as they are implemented
             # elif artifact.artifact_type == "place.classification":
             #     self._sync_place_labels(artifact)
+            # elif artifact.artifact_type == "ocr.text":
+            #     self._sync_ocr_fts(artifact)
 
         except Exception as e:
             error_msg = (
