@@ -20,66 +20,6 @@ class Video(Base):
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
-class Transcription(Base):
-    __tablename__ = "transcriptions"
-
-    segment_id = Column(String, primary_key=True)
-    video_id = Column(String, ForeignKey("videos.video_id"), nullable=False, index=True)
-    text = Column(Text, nullable=False)
-    start = Column(Float, nullable=False)  # Start time in seconds
-    end = Column(Float, nullable=False)  # End time in seconds
-    confidence = Column(Float)  # Transcription confidence score
-    speaker = Column(String)  # Speaker ID for multi-speaker audio
-    created_at = Column(DateTime, server_default=func.now())
-
-
-class Scene(Base):
-    __tablename__ = "scenes"
-
-    scene_id = Column(String, primary_key=True)
-    video_id = Column(String, ForeignKey("videos.video_id"), nullable=False, index=True)
-    scene = Column(Integer, nullable=False)  # Scene number/index
-    start = Column(Float, nullable=False)  # Start time in seconds
-    end = Column(Float, nullable=False)  # End time in seconds
-    thumbnail_path = Column(String)  # Path to scene thumbnail image
-    created_at = Column(DateTime, server_default=func.now())
-
-
-class Object(Base):
-    __tablename__ = "objects"
-
-    object_id = Column(String, primary_key=True)
-    video_id = Column(String, ForeignKey("videos.video_id"), nullable=False, index=True)
-    label = Column(String, nullable=False, index=True)  # Object class label
-    timestamps = Column(JSON, nullable=False)  # Timestamps where object appears
-    bounding_boxes = Column(JSON, nullable=False)  # Bounding box coordinates
-    created_at = Column(DateTime, server_default=func.now())
-
-
-class Face(Base):
-    __tablename__ = "faces"
-
-    face_id = Column(String, primary_key=True)
-    video_id = Column(String, ForeignKey("videos.video_id"), nullable=False, index=True)
-    person_id = Column(String)  # Person identifier for clustering
-    timestamps = Column(JSON, nullable=False)  # Timestamps where face appears
-    bounding_boxes = Column(JSON, nullable=False)  # Bounding box coordinates
-    confidence = Column(Float)  # Face detection confidence
-    created_at = Column(DateTime, server_default=func.now())
-
-
-class Topic(Base):
-    __tablename__ = "topics"
-
-    topic_id = Column(String, primary_key=True)
-    video_id = Column(String, ForeignKey("videos.video_id"), nullable=False, index=True)
-    label = Column(String, nullable=False, index=True)  # Topic label
-    keywords = Column(JSON, nullable=False)  # Related keywords
-    relevance_score = Column(Float, nullable=False)  # Topic relevance score
-    timestamps = Column(JSON, nullable=False)  # Timestamps where topic appears
-    created_at = Column(DateTime, server_default=func.now())
-
-
 class PathConfig(Base):
     __tablename__ = "path_configs"
 
@@ -102,3 +42,100 @@ class Task(Base):
     started_at = Column(DateTime)
     completed_at = Column(DateTime)
     error = Column(Text)  # Error message if failed
+
+
+class Artifact(Base):
+    """SQLAlchemy entity for artifact envelope storage."""
+
+    __tablename__ = "artifacts"
+
+    artifact_id = Column(String, primary_key=True)
+    asset_id = Column(String, ForeignKey("videos.video_id"), nullable=False, index=True)
+    artifact_type = Column(String, nullable=False, index=True)
+    schema_version = Column(Integer, nullable=False)
+    span_start_ms = Column(Integer, nullable=False)
+    span_end_ms = Column(Integer, nullable=False)
+    payload_json = Column(JSON, nullable=False)  # JSONB in PostgreSQL, JSON in SQLite
+    producer = Column(String, nullable=False)
+    producer_version = Column(String, nullable=False)
+    model_profile = Column(String, nullable=False, index=True)
+    config_hash = Column(String, nullable=False)
+    input_hash = Column(String, nullable=False)
+    run_id = Column(String, nullable=False, index=True)
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
+
+
+class Run(Base):
+    """SQLAlchemy entity for pipeline run tracking."""
+
+    __tablename__ = "runs"
+
+    run_id = Column(String, primary_key=True)
+    asset_id = Column(String, ForeignKey("videos.video_id"), nullable=False, index=True)
+    pipeline_profile = Column(String, nullable=False)
+    started_at = Column(DateTime, nullable=False)
+    finished_at = Column(DateTime)
+    status = Column(String, nullable=False, index=True)
+    error = Column(Text)
+
+
+class ArtifactSelection(Base):
+    """SQLAlchemy entity for artifact selection policies."""
+
+    __tablename__ = "artifact_selections"
+
+    asset_id = Column(
+        String, ForeignKey("videos.video_id"), nullable=False, primary_key=True
+    )
+    artifact_type = Column(String, nullable=False, primary_key=True)
+    selection_mode = Column(String, nullable=False)
+    preferred_profile = Column(String)
+    pinned_run_id = Column(String)
+    pinned_artifact_id = Column(String)
+    updated_at = Column(
+        DateTime, nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class SceneRange(Base):
+    """SQLAlchemy entity for scene_ranges projection table."""
+
+    __tablename__ = "scene_ranges"
+
+    artifact_id = Column(
+        String, ForeignKey("artifacts.artifact_id"), nullable=False, primary_key=True
+    )
+    asset_id = Column(String, nullable=False, index=True)
+    scene_index = Column(Integer, nullable=False, index=True)
+    start_ms = Column(Integer, nullable=False)
+    end_ms = Column(Integer, nullable=False)
+
+
+class ObjectLabel(Base):
+    """SQLAlchemy entity for object_labels projection table."""
+
+    __tablename__ = "object_labels"
+
+    artifact_id = Column(
+        String, ForeignKey("artifacts.artifact_id"), nullable=False, primary_key=True
+    )
+    asset_id = Column(String, nullable=False, index=True)
+    label = Column(String, nullable=False, index=True)
+    confidence = Column(Float, nullable=False, index=True)
+    start_ms = Column(Integer, nullable=False)
+    end_ms = Column(Integer, nullable=False)
+
+
+class FaceCluster(Base):
+    """SQLAlchemy entity for face_clusters projection table."""
+
+    __tablename__ = "face_clusters"
+
+    artifact_id = Column(
+        String, ForeignKey("artifacts.artifact_id"), nullable=False, primary_key=True
+    )
+    asset_id = Column(String, nullable=False, index=True)
+    cluster_id = Column(String, index=True)
+    confidence = Column(Float, nullable=False, index=True)
+    start_ms = Column(Integer, nullable=False)
+    end_ms = Column(Integer, nullable=False)

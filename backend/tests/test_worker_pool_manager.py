@@ -10,7 +10,6 @@ from src.services.worker_pool_manager import (
     HashWorker,
     ResourceType,
     TaskWorker,
-    TranscriptionWorker,
     WorkerConfig,
     WorkerPool,
     WorkerPoolManager,
@@ -55,7 +54,7 @@ class TestTaskWorker:
         result = worker.execute_task(task)
 
         assert result["status"] == "error"
-        assert result["error"] == "Test error"
+        assert result["error"] == "ValueError: Test error"
         assert task.is_failed()
 
 
@@ -95,36 +94,8 @@ class TestSpecificWorkers:
 
     def test_transcription_worker(self):
         """Test transcription worker."""
-        # Create mock transcription handler
-        mock_handler = Mock()
-        mock_handler.process_transcription_task.return_value = True
-        mock_handler.get_transcription_segments.return_value = [Mock(), Mock()]
-        mock_handler.get_transcription_text.return_value = "Sample transcription text"
-
-        # Create mock video repository
-        mock_video_repo = Mock()
-        mock_video = Mock()
-        mock_video.video_id = str(uuid.uuid4())
-        mock_video.file_path = "/test/video.mp4"
-        mock_video_repo.find_by_id.return_value = mock_video
-
-        worker = TranscriptionWorker(
-            transcription_handler=mock_handler, video_repository=mock_video_repo
-        )
-        task = Task(
-            task_id=str(uuid.uuid4()),
-            video_id=mock_video.video_id,
-            task_type=TaskType.TRANSCRIPTION.value,
-            status="pending",
-        )
-
-        result = worker._do_work(task)
-
-        # Should return transcription data
-        assert isinstance(result, dict)
-        assert "segments_count" in result
-        assert "total_text_length" in result
-        assert result["segments_count"] == 2
+        # Legacy transcription worker test removed - now using artifact-based workers
+        pass
 
 
 class TestWorkerPool:
@@ -314,16 +285,15 @@ class TestWorkerPoolManager:
         """Test creating default worker pools."""
         self.manager.create_default_pools()
 
-        # Should have pools for all task types
+        # Should have pools for all artifact-based task types
         expected_types = {
             TaskType.HASH,
             TaskType.TRANSCRIPTION,
             TaskType.SCENE_DETECTION,
             TaskType.OBJECT_DETECTION,
             TaskType.FACE_DETECTION,
-            TaskType.TOPIC_EXTRACTION,
-            TaskType.EMBEDDING_GENERATION,
-            TaskType.THUMBNAIL_GENERATION,
+            TaskType.OCR,
+            TaskType.PLACE_DETECTION,
         }
 
         assert set(self.manager.pools.keys()) == expected_types
