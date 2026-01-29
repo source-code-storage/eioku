@@ -18,8 +18,8 @@ easyocr = "^1.7.0"
 opencv-python = "^4.8.0"
 numpy = "^1.24"
 pillow = "^10.0"
-torch = "^2.0"
-torchvision = "^0.15"
+torch = {version = "^2.1", markers = "platform_system != 'Darwin'", extras = ["cu121"]}
+torchvision = {version = "^0.16", markers = "platform_system != 'Darwin'"}
 # Job queue
 arq = "^0.26"
 # Database
@@ -34,6 +34,9 @@ redis = "^5.0.0"
 # System monitoring
 psutil = "^5.9.0"
 nvidia-ml-py = "^12.535.108"
+# Metadata extraction
+pyexiftool = "^0.5.5"
+geopy = "^2.4.0"
 
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.1.6"

@@ -1,53 +1,56 @@
 # syntax=docker/dockerfile:1.4
-FROM nvidia/cuda:12.6.0-cudnn-runtime-ubuntu22.04
+# FASTEST OPTION: Uses official PyTorch image with PyTorch pre-baked
+FROM pytorch/pytorch:2.1.2-cuda12.1-cudnn8-runtime
 
-# Install Python 3.10 and system dependencies
-RUN apt-get update && apt-get install -y \
-    python3.10 \
-    python3.10-dev \
-    python3-pip \
+# Set timezone before installing packages to avoid interactive prompts
+ENV TZ=UTC
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+# Install system dependencies
+RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     libgl1-mesa-glx \
     libglib2.0-0 \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Make python3.10 the default python
-RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.10 1 && \
-    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 1
+# Install exiftool from pre-built distribution (no compilation needed), apt version is too old
+RUN curl -sL https://sourceforge.net/projects/exiftool/files/Image-ExifTool-13.47.tar.gz/download -o /tmp/Image-ExifTool-13.47.tar.gz && \
+    echo "97efd14de0fea5b29a689dad5334ea9c0600f3d64ebc062e30f3aa89fde3668c  /tmp/Image-ExifTool-13.47.tar.gz" | sha256sum -c - && \
+    tar -xzf /tmp/Image-ExifTool-13.47.tar.gz -C /tmp && \
+    cp /tmp/Image-ExifTool-13.47/exiftool /usr/local/bin/ && \
+    cp -r /tmp/Image-ExifTool-13.47/lib /usr/local/bin/ && \
+    chmod +x /usr/local/bin/exiftool && \
+    rm -rf /tmp/Image-ExifTool-13.47*
 
 # Install Poetry
-RUN pip install poetry
-# Ensure poetry is on PATH
+RUN pip install --no-cache-dir poetry==1.7.1
 ENV PATH="/root/.local/bin:$PATH"
 
-# Configure Poetry to install dependencies into global site-packages (not virtualenv)
-ENV POETRY_VIRTUALENVS_CREATE=false
-
-# Set CUDA library path - must be set before torch tries to load CUDA libraries
-ENV LD_LIBRARY_PATH=/usr/local/cuda-12.6/targets/x86_64-linux/lib:/usr/local/cuda-12.6/lib64:$LD_LIBRARY_PATH
+# CRITICAL: Disable virtualenv creation (we're in a container, it's wasteful)
+RUN poetry config virtualenvs.create false
 
 WORKDIR /app
 
-# Copy Poetry files only (for layer caching)
+# Copy Poetry files for dependency caching
 COPY ml-service/pyproject.toml ml-service/poetry.lock* ./
 
-# Install dependencies (including dev tools like ruff, pytest)
+# Install dependencies with poetry
 RUN poetry install --no-root
+
+# Copy labels file
+COPY ml-service/categories_places365.txt ./
 
 # Copy application code
 COPY ml-service/src ./src
-COPY ml-service/gunicorn.conf.py ./gunicorn.conf.py
 
-# Create model cache directories with proper permissions
+# Create model cache directories
 RUN mkdir -p /models/ultralytics /models/easyocr /models/huggingface && \
     chmod 777 /models /models/ultralytics /models/easyocr /models/huggingface
 
-# Expose port
 EXPOSE 8001
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD python -c "import requests; requests.get('http://localhost:8001/health')" || exit 1
 
-# Override NVIDIA entrypoint to use our command
 ENTRYPOINT []

@@ -15,6 +15,9 @@ class Video(Base):
     file_size = Column(Integer)  # File size in bytes
     processed_at = Column(DateTime)
     last_modified = Column(DateTime, nullable=False)
+    file_created_at = Column(
+        DateTime, nullable=True, index=True
+    )  # From EXIF or file system
     status = Column(String, nullable=False, default="pending", index=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
@@ -38,6 +41,7 @@ class Task(Base):
     status = Column(String, nullable=False, default="pending", index=True)  # Status
     priority = Column(Integer, nullable=False, default=5)  # 1=highest, 10=lowest
     dependencies = Column(JSON)  # List of task_ids that must complete first
+    language = Column(String, nullable=True, index=True)  # ISO 639-1 language code
     created_at = Column(DateTime, server_default=func.now())
     started_at = Column(DateTime)
     completed_at = Column(DateTime)

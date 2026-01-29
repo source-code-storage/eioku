@@ -57,6 +57,7 @@ async def process_ml_task(
     session = None
     try:
         logger.info(f"🚀 Dequeued task {task_id} ({task_type}) for video {video_id}")
+        logger.debug(f"📋 Task config {task_id}: {config}")
 
         # Initialize database session
         from ..database.connection import get_scoped_db, remove_scoped_session
@@ -73,7 +74,7 @@ async def process_ml_task(
 
         task.status = "running"
         task.started_at = datetime.utcnow()
-        session.commit()
+        session.flush()  # Flush but don't commit yet
         logger.info(f"📍 Task {task_id} marked as RUNNING")
 
         # Initialize model manager for this task
@@ -95,6 +96,7 @@ async def process_ml_task(
             "ocr": "ocr",
             "place_detection": "places",
             "scene_detection": "scenes",
+            "metadata_extraction": "metadata",
         }
         endpoint = task_to_endpoint.get(task_type)
         if not endpoint:
@@ -115,6 +117,12 @@ async def process_ml_task(
             result = await model_manager.classify_places(video_path, config or {})
         elif task_type == "scene_detection":
             result = await model_manager.detect_scenes(video_path, config or {})
+        elif task_type == "metadata_extraction":
+            result = await model_manager.extract_metadata(video_path, config or {})
+            # Update video metadata using the same session
+            await _update_video_file_created_at(
+                session, task.video_id, result, video_path
+            )
         else:
             raise ValueError(f"Unknown task type: {task_type}")
 
@@ -144,6 +152,12 @@ async def process_ml_task(
         producer_version = result_dict.get("producer_version", "1.0.0")
         model_profile = result_dict.get("model_profile", "balanced")
 
+        # Set producer info for metadata_extraction
+        if task_type == "metadata_extraction":
+            producer = "pyexiftool"
+            producer_version = "0.5.5"
+            model_profile = "balanced"
+
         # Map task types to artifact types
         task_to_artifact_type = {
             "object_detection": "object.detection",
@@ -152,6 +166,7 @@ async def process_ml_task(
             "ocr": "ocr.text",
             "place_detection": "place.classification",
             "scene_detection": "scene",
+            "metadata_extraction": "video.metadata",
         }
 
         artifact_type = task_to_artifact_type.get(task_type)
@@ -166,6 +181,7 @@ async def process_ml_task(
             "ocr": "detections",
             "place_detection": "classifications",
             "scene_detection": "scenes",
+            "metadata_extraction": "metadata",
         }
 
         result_key = task_to_result_key.get(task_type)
@@ -173,16 +189,69 @@ async def process_ml_task(
             raise ValueError(f"Unknown task type: {task_type}")
 
         # Extract detections/segments from response
-        detections = result_dict.get(result_key, [])
-        if not detections:
-            logger.warning(
-                f"⚠️  No detections found in inference results for task {task_id}"
-            )
+        # For metadata_extraction, the result is a single object, not a list
+        if task_type == "metadata_extraction":
+            metadata = result_dict.get(result_key, {})
+            if not metadata:
+                logger.warning(
+                    f"⚠️  No metadata found in inference results for task {task_id}"
+                )
+                detections = []
+            else:
+                logger.info(
+                    f"🔄 Processing metadata into ArtifactEnvelope for task {task_id}"
+                )
+                logger.debug(f"Metadata dict: {metadata}")
+                # For metadata_extraction, create a single artifact with the entire metadata
+                try:
+                    artifact_id = f"{video_id}_{task_type}_{run_id}_0"
+                    payload_json = json.dumps(metadata)
+
+                    # Metadata spans entire video (0 to duration)
+                    duration_seconds = metadata.get("duration_seconds", 0)
+                    span_start_ms = 0
+                    span_end_ms = (
+                        int(duration_seconds * 1000) if duration_seconds else 0
+                    )
+
+                    logger.debug(
+                        f"Creating metadata artifact: duration_seconds={duration_seconds}, "
+                        f"span_start_ms={span_start_ms}, span_end_ms={span_end_ms}"
+                    )
+
+                    envelope = ArtifactEnvelope(
+                        artifact_id=artifact_id,
+                        asset_id=video_id,
+                        artifact_type=artifact_type,
+                        schema_version=1,
+                        span_start_ms=span_start_ms,
+                        span_end_ms=span_end_ms,
+                        payload_json=payload_json,
+                        producer=producer,
+                        producer_version=producer_version,
+                        model_profile=model_profile,
+                        config_hash=config_hash,
+                        input_hash=input_hash,
+                        run_id=run_id,
+                        created_at=datetime.utcnow(),
+                    )
+                    envelopes.append(envelope)
+                    logger.info(f"✅ Created metadata artifact for task {task_id}")
+                except (ValueError, KeyError) as e:
+                    logger.error(
+                        f"❌ Error creating metadata artifact for task {task_id}: {e}"
+                    )
         else:
-            logger.info(
-                f"🔄 Processing {len(detections)} detections into ArtifactEnvelopes "
-                f"for task {task_id}"
-            )
+            detections = result_dict.get(result_key, [])
+            if not detections:
+                logger.warning(
+                    f"⚠️  No detections found in inference results for task {task_id}"
+                )
+            else:
+                logger.info(
+                    f"🔄 Processing {len(detections)} detections into ArtifactEnvelopes "
+                    f"for task {task_id}"
+                )
 
             # Transform each detection to an ArtifactEnvelope
             for idx, detection in enumerate(detections):
@@ -191,12 +260,24 @@ async def process_ml_task(
                     artifact_id = f"{video_id}_{task_type}_{run_id}_{idx}"
 
                     # Extract time span (in milliseconds)
+                    # For metadata_extraction, span covers entire video (0 to duration)
+                    if task_type == "metadata_extraction":
+                        # Get video duration from metadata if available
+                        duration_seconds = detection.get("duration_seconds", 0)
+                        span_start_ms = 0
+                        span_end_ms = (
+                            int(duration_seconds * 1000) if duration_seconds else 0
+                        )
+                        logger.debug(
+                            f"Metadata artifact: duration_seconds={duration_seconds}, "
+                            f"span_start_ms={span_start_ms}, span_end_ms={span_end_ms}"
+                        )
                     # Some detections have explicit start_ms/end_ms
                     # (transcription, scenes)
-                    # Others have timestamp_ms (point-in-time detections)
-                    if "start_ms" in detection and "end_ms" in detection:
+                    elif "start_ms" in detection and "end_ms" in detection:
                         span_start_ms = int(detection.get("start_ms", 0))
                         span_end_ms = int(detection.get("end_ms", 0))
+                    # Others have timestamp_ms (point-in-time detections)
                     elif "timestamp_ms" in detection:
                         # For point-in-time detections, use timestamp as
                         # both start and end
@@ -272,6 +353,10 @@ async def process_ml_task(
             # Convert ArtifactEnvelope domain objects to ORM models
             orm_envelopes = []
             for envelope in envelopes:
+                # Parse payload_json string to dict for proper JSONB storage
+                # (envelope.payload_json is a JSON string, but JSONB column needs a dict)
+                payload_dict = json.loads(envelope.payload_json)
+
                 orm_envelope = Artifact(
                     artifact_id=envelope.artifact_id,
                     asset_id=envelope.asset_id,
@@ -279,7 +364,7 @@ async def process_ml_task(
                     schema_version=envelope.schema_version,
                     span_start_ms=envelope.span_start_ms,
                     span_end_ms=envelope.span_end_ms,
-                    payload_json=envelope.payload_json,
+                    payload_json=payload_dict,
                     producer=envelope.producer,
                     producer_version=envelope.producer_version,
                     model_profile=envelope.model_profile,
@@ -292,7 +377,7 @@ async def process_ml_task(
 
             # Batch insert
             session.add_all(orm_envelopes)
-            session.commit()
+            session.flush()  # Flush but don't commit yet
             logger.info(
                 f"✅ Successfully inserted {len(orm_envelopes)} artifacts to "
                 f"PostgreSQL for task {task_id}"
@@ -307,6 +392,7 @@ async def process_ml_task(
             from ..services.projection_sync_service import ProjectionSyncService
 
             projection_service = ProjectionSyncService(session)
+            projection_errors = []
             for envelope in envelopes:
                 try:
                     projection_service.sync_artifact(envelope)
@@ -315,6 +401,18 @@ async def process_ml_task(
                         f"⚠️  Failed to sync projection for artifact "
                         f"{envelope.artifact_id}: {e}"
                     )
+                    projection_errors.append((envelope.artifact_id, str(e)))
+
+            if projection_errors:
+                logger.warning(
+                    f"⚠️  {len(projection_errors)} projection sync errors occurred, "
+                    f"rolling back transaction"
+                )
+                session.rollback()
+                raise RuntimeError(
+                    f"Projection sync failed for {len(projection_errors)} artifacts: "
+                    f"{projection_errors}"
+                )
 
             logger.info(
                 f"✅ Projection sync complete for task {task_id} "
@@ -324,7 +422,7 @@ async def process_ml_task(
         # Mark task as COMPLETED
         task.status = "completed"
         task.completed_at = datetime.utcnow()
-        session.commit()
+        session.commit()  # Single commit at the end
         logger.info(
             f"✅ Task {task_id} ({task_type}) marked as COMPLETED "
             f"({len(envelopes)} artifacts persisted)"
@@ -373,7 +471,14 @@ async def process_ml_task(
     finally:
         # Close database session
         if session:
-            session.close()
+            try:
+                session.commit()  # Ensure any pending changes are committed
+            except Exception as e:
+                logger.error(f"❌ Failed to commit session: {e}")
+                try:
+                    session.rollback()
+                except Exception as rollback_error:
+                    logger.error(f"❌ Failed to rollback session: {rollback_error}")
             logger.debug(f"Database session closed for task {task_id}")
 
         # Remove scoped session
@@ -381,3 +486,109 @@ async def process_ml_task(
 
         remove_scoped_session()
         logger.debug(f"Scoped session removed for task {task_id}")
+
+
+async def _update_video_file_created_at(
+    session, video_id: str, metadata_result: dict, video_path: str
+) -> None:
+    """Update video metadata from extraction results.
+
+    Sets:
+    1. file_created_at: EXIF create_date → file mtime → current timestamp
+    2. duration: from metadata duration_seconds
+    3. processed_at: current timestamp
+
+    Args:
+        session: SQLAlchemy session (shared with process_ml_task)
+        video_id: Video identifier
+        metadata_result: Result dict from metadata extraction
+        video_path: Path to video file
+    """
+    from ..database.models import Video
+
+    try:
+        video = session.query(Video).filter(Video.video_id == video_id).first()
+        if not video:
+            logger.warning(f"Video {video_id} not found for metadata update")
+            return
+
+        file_created_at = None
+        duration = None
+
+        # Try to get create_date from metadata
+        metadata_dict = metadata_result.get("metadata", {})
+        if isinstance(metadata_dict, dict):
+            # Extract duration
+            duration_seconds = metadata_dict.get("duration_seconds")
+            if duration_seconds:
+                try:
+                    duration = float(duration_seconds)
+                    logger.debug(f"Extracted duration: {duration} seconds")
+                except (ValueError, TypeError):
+                    pass
+
+            # Extract create_date
+            create_date_str = metadata_dict.get("create_date")
+            if create_date_str:
+                try:
+                    # Handle exiftool format: YYYY:MM:DD HH:MM:SS
+                    if ":" in create_date_str and create_date_str[4] == ":":
+                        # Replace colons with dashes in date part only
+                        parts = create_date_str.split(" ")
+                        date_part = parts[0].replace(":", "-")
+                        time_part = parts[1] if len(parts) > 1 else "00:00:00"
+                        iso_format = f"{date_part}T{time_part}"
+                        file_created_at = datetime.fromisoformat(iso_format)
+                    else:
+                        # Try ISO format directly
+                        file_created_at = datetime.fromisoformat(create_date_str)
+                    logger.info(
+                        f"✅ Set file_created_at from EXIF: {file_created_at} "
+                        f"for video {video_id}"
+                    )
+                except (ValueError, TypeError) as e:
+                    logger.warning(
+                        f"⚠️  Failed to parse create_date '{create_date_str}': {e}"
+                    )
+
+        # Fallback to file system mtime
+        if not file_created_at:
+            try:
+                mtime = os.path.getmtime(video_path)
+                file_created_at = datetime.fromtimestamp(mtime)
+                logger.info(
+                    f"✅ Set file_created_at from file mtime: {file_created_at} "
+                    f"for video {video_id}"
+                )
+            except (OSError, ValueError) as e:
+                logger.warning(f"⚠️  Failed to get file mtime for {video_path}: {e}")
+
+        # Fallback to current timestamp
+        if not file_created_at:
+            file_created_at = datetime.utcnow()
+            logger.info(
+                f"✅ Set file_created_at to current timestamp: {file_created_at} "
+                f"for video {video_id}"
+            )
+
+        # Update all video metadata fields in the shared session
+        video.file_created_at = file_created_at
+        if duration:
+            video.duration = duration
+        video.processed_at = datetime.utcnow()
+
+        logger.debug(
+            f"Updating video {video_id}: file_created_at={file_created_at}, "
+            f"duration={duration}, processed_at={video.processed_at}"
+        )
+        logger.info(
+            f"✅ Updated video {video_id} metadata: "
+            f"file_created_at={file_created_at}, duration={duration}"
+        )
+
+    except Exception as e:
+        logger.error(
+            f"❌ Error updating video metadata for {video_id}: {e}",
+            exc_info=True,
+        )
+        raise

@@ -37,6 +37,11 @@ class VideoRepository(ABC):
         """Find all videos."""
         pass
 
+    @abstractmethod
+    def get_location(self, video_id: str) -> dict | None:
+        """Get location information for a video from the video_locations projection."""
+        pass
+
 
 class PathConfigRepository(ABC):
     """Abstract repository interface for PathConfig persistence."""
@@ -88,6 +93,22 @@ class TaskRepository(ABC):
     @abstractmethod
     def find_by_video_and_type(self, video_id: str, task_type: str) -> list[Task]:
         """Find tasks by video ID and task type."""
+        pass
+
+    @abstractmethod
+    def find_by_video_type_language(
+        self, video_id: str, task_type: str, language: str | None
+    ) -> Task | None:
+        """Find a task by video ID, task type, and language.
+
+        Args:
+            video_id: Video ID to search for
+            task_type: Task type to search for
+            language: Language code (None for language-agnostic tasks)
+
+        Returns:
+            Task if found, None otherwise
+        """
         pass
 
     @abstractmethod

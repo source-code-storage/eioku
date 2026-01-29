@@ -1,5 +1,6 @@
 """API controller for artifact-based endpoints."""
 
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
@@ -9,6 +10,8 @@ from ..api.schemas import (
     JumpResponseSchema,
     ProfileInfoSchema,
     ProfilesResponseSchema,
+    RunInfoSchema,
+    RunsResponseSchema,
 )
 from ..database.connection import get_db
 from ..domain.artifacts import SelectionPolicy
@@ -212,6 +215,36 @@ async def find_within_video(
     return FindResponseSchema(matches=matches)
 
 
+@router.get("/{video_id}/tasks")
+async def get_video_tasks(
+    video_id: str,
+    session: Session = Depends(get_db),
+) -> list[dict]:
+    """Get all tasks for a video."""
+    from ..repositories.task_repository import SQLAlchemyTaskRepository
+
+    task_repo = SQLAlchemyTaskRepository(session)
+    tasks = task_repo.find_by_video_id(video_id)
+
+    result = []
+    for task in tasks:
+        task_dict = {
+            "task_id": str(task.task_id),
+            "video_id": str(task.video_id),
+            "task_type": task.task_type,
+            "status": task.status,
+            "language": task.language,
+            "created_at": (task.created_at.isoformat() if task.created_at else None),
+            "started_at": (task.started_at.isoformat() if task.started_at else None),
+            "completed_at": (
+                task.completed_at.isoformat() if task.completed_at else None
+            ),
+        }
+        result.append(task_dict)
+
+    return result
+
+
 @router.get("/{video_id}/artifacts", response_model=list[ArtifactResponseSchema])
 async def get_artifacts(
     video_id: str,
@@ -220,9 +253,16 @@ async def get_artifacts(
         None, description="Filter by start time (milliseconds)"
     ),
     to_ms: int | None = Query(None, description="Filter by end time (milliseconds)"),
+    run_id: str | None = Query(None, description="Filter by specific run ID"),
+    payload_filter: str | None = Query(
+        None, description="Filter by payload field (e.g., 'language=en')"
+    ),
     selection: str | None = Query(
         None,
-        description=("Selection mode: default, pinned, latest, profile, best_quality"),
+        description=(
+            "Selection mode: default, pinned, latest, latest_per_language, "
+            "profile, best_quality"
+        ),
     ),
     profile: str | None = Query(
         None, description="Model profile: fast, balanced, high_quality"
@@ -237,6 +277,8 @@ async def get_artifacts(
     Returns artifacts with their full payloads.
     """
     # Build selection policy if specified
+    # Note: We only apply selection policy if explicitly requested.
+    # This allows multi-language tasks to return all artifacts by default.
     selection_policy = None
     if selection or profile:
         selection_policy = SelectionPolicy(
@@ -246,10 +288,19 @@ async def get_artifacts(
             preferred_profile=profile,
         )
     elif type:
-        # Get default policy for this artifact type
-        selection_policy = policy_manager.get_policy(
-            video_id, type
-        ) or policy_manager.get_default_policy(video_id, type)
+        # Only apply explicit user-set policy, not a default "latest" policy
+        # This ensures multi-language OCR/transcription tasks return all results
+        selection_policy = policy_manager.get_policy(video_id, type)
+
+    payload_filter_dict = None
+    if payload_filter:
+        if "=" not in payload_filter:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid payload_filter format. Must be 'key=value'",
+            )
+        key, value = payload_filter.split("=", 1)
+        payload_filter_dict = {key: value}
 
     # Query artifacts
     artifacts = artifact_repo.get_by_asset(
@@ -258,6 +309,8 @@ async def get_artifacts(
         start_ms=from_ms,
         end_ms=to_ms,
         selection=selection_policy,
+        payload_filters=payload_filter_dict,
+        run_id=run_id,
     )
 
     # Convert to response schema
@@ -330,4 +383,68 @@ async def get_available_profiles(
         video_id=video_id,
         artifact_type=artifact_type,
         profiles=profiles,
+    )
+
+
+@router.get("/{video_id}/runs", response_model=RunsResponseSchema)
+async def get_available_runs(
+    video_id: str,
+    artifact_type: str = Query(..., description="Artifact type to query runs for"),
+    artifact_repo: SqlArtifactRepository = Depends(get_artifact_repository),
+) -> RunsResponseSchema:
+    """
+    Get available runs for a video and artifact type.
+
+    Returns a list of all runs for this video and artifact type,
+    including artifact counts and creation timestamps.
+    """
+    import json
+
+    artifacts = artifact_repo.get_by_asset(
+        asset_id=video_id,
+        artifact_type=artifact_type,
+    )
+
+    run_map: dict[str, dict] = {}
+    for artifact in artifacts:
+        run_id = artifact.run_id
+        if run_id not in run_map:
+            # Extract language from payload if available
+            language = None
+            if artifact.payload_json:
+                payload = json.loads(artifact.payload_json)
+                if artifact.artifact_type == "transcript.segment":
+                    language = payload.get("language")
+                elif artifact.artifact_type == "ocr.text":
+                    languages_list = payload.get("languages")
+                    if isinstance(languages_list, list) and languages_list:
+                        language = languages_list[
+                            0
+                        ]  # Take the first language for display
+
+            run_map[run_id] = {
+                "created_at": artifact.created_at,
+                "artifact_count": 0,
+                "model_profile": artifact.model_profile,
+                "language": language,
+            }
+        run_map[run_id]["artifact_count"] += 1
+
+    runs_list = [
+        RunInfoSchema(
+            run_id=run_id,
+            created_at=data["created_at"],
+            artifact_count=data["artifact_count"],
+            model_profile=data["model_profile"],
+            language=data["language"],
+        )
+        for run_id, data in run_map.items()
+    ]
+    # Sort by created_at descending
+    runs_list.sort(key=lambda r: r.created_at, reverse=True)
+
+    return RunsResponseSchema(
+        video_id=video_id,
+        artifact_type=artifact_type,
+        runs=runs_list,
     )
