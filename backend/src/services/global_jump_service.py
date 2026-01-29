@@ -10,9 +10,12 @@ without requiring new data structures.
 """
 
 import logging
+from typing import Literal
 
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
+from ..database.models import ObjectLabel
 from ..database.models import Video as VideoEntity
 from ..domain.exceptions import VideoNotFoundError
 from ..domain.models import GlobalJumpResult, JumpTo
@@ -103,3 +106,138 @@ class GlobalJumpService:
             artifact_id=artifact_id,
             preview=preview,
         )
+
+    def _search_objects_global(
+        self,
+        direction: Literal["next"],
+        from_video_id: str,
+        from_ms: int,
+        label: str | None = None,
+        min_confidence: float | None = None,
+        limit: int = 1,
+    ) -> list[GlobalJumpResult]:
+        """Search for object labels across all videos in global timeline order.
+
+        Queries the object_labels projection table joined with videos to find
+        matching objects in chronological order based on the global timeline.
+
+        Args:
+            direction: Navigation direction ("next" for forward in timeline).
+            from_video_id: Starting video ID for the search.
+            from_ms: Starting timestamp in milliseconds within the video.
+            label: Optional label filter to match specific object types.
+            min_confidence: Optional minimum confidence threshold (0-1).
+            limit: Maximum number of results to return (default 1).
+
+        Returns:
+            List of GlobalJumpResult objects ordered by global timeline.
+            Empty list if no matching objects are found.
+
+        Raises:
+            VideoNotFoundError: If from_video_id does not exist.
+        """
+        # Get the current video to determine its position in the global timeline
+        current_video = self._get_video(from_video_id)
+        current_file_created_at = current_video.file_created_at
+
+        # Build base query joining object_labels with videos
+        query = self.session.query(
+            ObjectLabel.artifact_id,
+            ObjectLabel.asset_id,
+            ObjectLabel.label,
+            ObjectLabel.confidence,
+            ObjectLabel.start_ms,
+            ObjectLabel.end_ms,
+            VideoEntity.filename,
+            VideoEntity.file_created_at,
+        ).join(VideoEntity, VideoEntity.video_id == ObjectLabel.asset_id)
+
+        # Apply label filter if specified
+        if label is not None:
+            query = query.filter(ObjectLabel.label == label)
+
+        # Apply min_confidence filter if specified
+        if min_confidence is not None:
+            query = query.filter(ObjectLabel.confidence >= min_confidence)
+
+        # Apply direction-specific WHERE clause for "next" direction
+        # Results must be chronologically after the current position
+        # Global timeline ordering: file_created_at > video_id > start_ms
+        if direction == "next":
+            # Handle NULL file_created_at values
+            # NULLs are treated as "unknown" and sorted after non-NULL values
+            if current_file_created_at is not None:
+                query = query.filter(
+                    or_(
+                        # Case 1: Videos with later file_created_at
+                        VideoEntity.file_created_at > current_file_created_at,
+                        # Case 2: Videos with NULL file_created_at (sorted after)
+                        VideoEntity.file_created_at.is_(None),
+                        # Case 3: Same file_created_at, later video_id
+                        and_(
+                            VideoEntity.file_created_at == current_file_created_at,
+                            VideoEntity.video_id > from_video_id,
+                        ),
+                        # Case 4: Same video, later start_ms
+                        and_(
+                            VideoEntity.file_created_at == current_file_created_at,
+                            VideoEntity.video_id == from_video_id,
+                            ObjectLabel.start_ms > from_ms,
+                        ),
+                    )
+                )
+            else:
+                # Current video has NULL file_created_at
+                # Only consider videos with NULL file_created_at
+                query = query.filter(
+                    or_(
+                        # Case 1: Same NULL file_created_at, later video_id
+                        and_(
+                            VideoEntity.file_created_at.is_(None),
+                            VideoEntity.video_id > from_video_id,
+                        ),
+                        # Case 2: Same video, later start_ms
+                        and_(
+                            VideoEntity.file_created_at.is_(None),
+                            VideoEntity.video_id == from_video_id,
+                            ObjectLabel.start_ms > from_ms,
+                        ),
+                    )
+                )
+
+            # Order by global timeline (ascending for "next")
+            # NULLS LAST ensures NULL file_created_at values come after non-NULL
+            query = query.order_by(
+                VideoEntity.file_created_at.asc().nulls_last(),
+                VideoEntity.video_id.asc(),
+                ObjectLabel.start_ms.asc(),
+            )
+
+        # Apply limit
+        query = query.limit(limit)
+
+        # Execute query and convert results to GlobalJumpResult objects
+        results = []
+        for row in query.all():
+            result = self._to_global_result(
+                video_id=row.asset_id,
+                video_filename=row.filename,
+                file_created_at=row.file_created_at,
+                start_ms=row.start_ms,
+                end_ms=row.end_ms,
+                artifact_id=row.artifact_id,
+                preview={
+                    "label": row.label,
+                    "confidence": row.confidence,
+                },
+            )
+            results.append(result)
+
+        logger.debug(
+            f"_search_objects_global: direction={direction}, "
+            f"from_video_id={from_video_id}, from_ms={from_ms}, "
+            f"label={label}, min_confidence={min_confidence}, "
+            f"found {len(results)} results"
+        )
+
+        return results

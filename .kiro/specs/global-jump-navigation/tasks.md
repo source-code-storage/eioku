@@ -40,7 +40,7 @@ The implementation follows a bottom-up approach: start with data models and serv
   - Test _to_global_result() with various artifact types
   - _Requirements: 8.1_
 
-- [ ] 4. Implement object label search in GlobalJumpService
+- [x] 4. Implement object label search in GlobalJumpService
   - Implement _search_objects_global() method for "next" direction
   - Build query on object_labels projection table joined with videos
   - Apply label filter
