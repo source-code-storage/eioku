@@ -3,7 +3,8 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import MetadataViewer from './MetadataViewer';
 
 // Mock fetch
-global.fetch = vi.fn();
+const mockFetch = vi.fn();
+globalThis.fetch = mockFetch;
 
 describe('MetadataViewer', () => {
   beforeEach(() => {
@@ -11,7 +12,7 @@ describe('MetadataViewer', () => {
   });
 
   it('displays loading state initially', () => {
-    (global.fetch as any).mockImplementation(
+    mockFetch.mockImplementation(
       () => new Promise(() => {}) // Never resolves
     );
 
@@ -20,7 +21,7 @@ describe('MetadataViewer', () => {
   });
 
   it('displays error message on fetch failure', async () => {
-    (global.fetch as any).mockRejectedValue(new Error('Network error'));
+    mockFetch.mockRejectedValue(new Error('Network error'));
 
     render(<MetadataViewer videoId="video_001" />);
 
@@ -30,7 +31,7 @@ describe('MetadataViewer', () => {
   });
 
   it('displays no metadata message when empty', async () => {
-    (global.fetch as any).mockResolvedValue({
+    mockFetch.mockResolvedValue({
       json: async () => [],
     });
 
@@ -42,7 +43,7 @@ describe('MetadataViewer', () => {
   });
 
   it('displays GPS coordinates in user-friendly format', async () => {
-    (global.fetch as any).mockResolvedValue({
+    mockFetch.mockResolvedValue({
       json: async () => [
         {
           artifact_id: 'artifact_001',
@@ -64,7 +65,7 @@ describe('MetadataViewer', () => {
   });
 
   it('displays camera information', async () => {
-    (global.fetch as any).mockResolvedValue({
+    mockFetch.mockResolvedValue({
       json: async () => [
         {
           artifact_id: 'artifact_001',
@@ -87,7 +88,7 @@ describe('MetadataViewer', () => {
   });
 
   it('displays file information', async () => {
-    (global.fetch as any).mockResolvedValue({
+    mockFetch.mockResolvedValue({
       json: async () => [
         {
           artifact_id: 'artifact_001',
@@ -116,7 +117,7 @@ describe('MetadataViewer', () => {
   });
 
   it('displays temporal information', async () => {
-    (global.fetch as any).mockResolvedValue({
+    mockFetch.mockResolvedValue({
       json: async () => [
         {
           artifact_id: 'artifact_001',
@@ -141,7 +142,7 @@ describe('MetadataViewer', () => {
   });
 
   it('displays image information', async () => {
-    (global.fetch as any).mockResolvedValue({
+    mockFetch.mockResolvedValue({
       json: async () => [
         {
           artifact_id: 'artifact_001',
@@ -167,7 +168,7 @@ describe('MetadataViewer', () => {
   });
 
   it('displays bitrate information', async () => {
-    (global.fetch as any).mockResolvedValue({
+    mockFetch.mockResolvedValue({
       json: async () => [
         {
           artifact_id: 'artifact_001',
@@ -187,7 +188,7 @@ describe('MetadataViewer', () => {
   });
 
   it('handles missing fields gracefully', async () => {
-    (global.fetch as any).mockResolvedValue({
+    mockFetch.mockResolvedValue({
       json: async () => [
         {
           artifact_id: 'artifact_001',
@@ -212,7 +213,7 @@ describe('MetadataViewer', () => {
   });
 
   it('uses custom API URL', async () => {
-    (global.fetch as any).mockResolvedValue({
+    mockFetch.mockResolvedValue({
       json: async () => [
         {
           artifact_id: 'artifact_001',
@@ -226,14 +227,14 @@ describe('MetadataViewer', () => {
     render(<MetadataViewer videoId="video_001" apiUrl="http://custom-api:8080" />);
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
+      expect(mockFetch).toHaveBeenCalledWith(
         'http://custom-api:8080/api/v1/videos/video_001/artifacts?type=video.metadata'
       );
     });
   });
 
   it('displays all metadata sections when all fields are present', async () => {
-    (global.fetch as any).mockResolvedValue({
+    mockFetch.mockResolvedValue({
       json: async () => [
         {
           artifact_id: 'artifact_001',
