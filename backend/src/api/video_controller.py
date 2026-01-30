@@ -1,7 +1,4 @@
-from pathlib import Path
-
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from ..api.schemas import VideoCreateSchema, VideoResponseSchema, VideoUpdateSchema
