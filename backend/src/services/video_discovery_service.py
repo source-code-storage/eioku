@@ -26,6 +26,7 @@ ACTIVE_TASK_TYPES = [
     "place_detection",
     "scene_detection",
     "metadata_extraction",
+    "thumbnail.extraction",
 ]
 
 
