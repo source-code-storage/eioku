@@ -14,16 +14,20 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from src.api.thumbnail_controller import CACHE_MAX_AGE
-from src.main_api import app
+from src.api.thumbnail_controller import CACHE_MAX_AGE, router
 
 
 @pytest.fixture
 def client():
-    """Create test client for the thumbnail endpoint."""
-    with TestClient(app) as test_client:
+    """Create test client for the thumbnail endpoint using isolated app."""
+    # Create a minimal FastAPI app with just the thumbnail router
+    # This avoids the full app lifespan which requires Redis
+    test_app = FastAPI()
+    test_app.include_router(router, prefix="/v1")
+    with TestClient(test_app) as test_client:
         yield test_client
 
 
