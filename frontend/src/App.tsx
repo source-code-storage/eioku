@@ -118,7 +118,7 @@ function App() {
             fontWeight: '500',
           }}
         >
-          🔍 Global Search
+          🔍 Jump Search
         </button>
       </div>
       <VideoGallery onSelectVideo={handleSelectVideo} />

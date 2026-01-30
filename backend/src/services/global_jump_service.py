@@ -1424,7 +1424,7 @@ class GlobalJumpService:
     def jump_next(
         self,
         kind: str,
-        from_video_id: str,
+        from_video_id: str | None,
         from_ms: int | None = None,
         label: str | None = None,
         query: str | None = None,
@@ -1440,7 +1440,8 @@ class GlobalJumpService:
         Args:
             kind: Type of artifact to search for. Must be one of:
                   object, face, transcript, ocr, scene, place, location.
-            from_video_id: Starting video ID for the search.
+            from_video_id: Starting video ID for the search. If None, starts from
+                          the beginning of the global timeline.
             from_ms: Starting timestamp in milliseconds (default: 0).
             label: Filter by label (for object and place kinds).
             query: Text search query (for transcript and ocr kinds).
@@ -1462,6 +1463,21 @@ class GlobalJumpService:
                 "kind",
                 f"Invalid artifact kind. Must be one of: {valid_kinds}",
             )
+
+        # If no from_video_id, get the earliest video in the timeline
+        if from_video_id is None:
+            earliest_video = (
+                self.session.query(VideoEntity)
+                .order_by(
+                    VideoEntity.file_created_at.asc().nulls_last(),
+                    VideoEntity.video_id.asc(),
+                )
+                .first()
+            )
+            if earliest_video is None:
+                return []  # No videos in the database
+            from_video_id = earliest_video.video_id
+            from_ms = 0  # Start from the beginning
 
         # Default from_ms to 0 for "next" direction
         if from_ms is None:
@@ -1537,7 +1553,7 @@ class GlobalJumpService:
     def jump_prev(
         self,
         kind: str,
-        from_video_id: str,
+        from_video_id: str | None,
         from_ms: int | None = None,
         label: str | None = None,
         query: str | None = None,
@@ -1553,7 +1569,8 @@ class GlobalJumpService:
         Args:
             kind: Type of artifact to search for. Must be one of:
                   object, face, transcript, ocr, scene, place, location.
-            from_video_id: Starting video ID for the search.
+            from_video_id: Starting video ID for the search. If None, starts from
+                          the end of the global timeline.
             from_ms: Starting timestamp in milliseconds. If None, defaults to
                      a large value representing the end of the video.
             label: Filter by label (for object and place kinds).
@@ -1577,6 +1594,21 @@ class GlobalJumpService:
                 "kind",
                 f"Invalid artifact kind. Must be one of: {valid_kinds}",
             )
+
+        # If no from_video_id, get the latest video in the timeline
+        if from_video_id is None:
+            latest_video = (
+                self.session.query(VideoEntity)
+                .order_by(
+                    VideoEntity.file_created_at.desc().nulls_last(),
+                    VideoEntity.video_id.desc(),
+                )
+                .first()
+            )
+            if latest_video is None:
+                return []  # No videos in the database
+            from_video_id = latest_video.video_id
+            from_ms = 2**31 - 1  # Start from the end
 
         # Default from_ms to a large value for "prev" direction
         # This represents "end of video" - searching backward from the end

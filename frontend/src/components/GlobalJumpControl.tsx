@@ -55,9 +55,14 @@ export interface GlobalJumpControlProps {
   
   /**
    * Callback when navigation occurs (for search page to navigate to player).
-   * Called with the video_id and timestamp of the result.
+   * Called with the video_id, timestamp, and current form state.
    */
-  onNavigate?: (videoId: string, timestampMs: number) => void;
+  onNavigate?: (videoId: string, timestampMs: number, formState: {
+    artifactType: ArtifactType;
+    label: string;
+    query: string;
+    confidence: number;
+  }) => void;
   
   /** Initial artifact type (for preserving form state across page navigation) */
   initialArtifactType?: ArtifactType;
@@ -248,8 +253,12 @@ export default function GlobalJumpControl({
       const data: GlobalJumpResponse = await response.json();
 
       if (data.results.length === 0) {
-        setCurrentMatch('No results found');
+        const message = direction === 'next' 
+          ? 'No more results - reached end of library'
+          : 'No more results - reached beginning of library';
+        setCurrentMatch(message);
         setLastResult(null);
+        setError(message);
         return;
       }
 
@@ -263,7 +272,12 @@ export default function GlobalJumpControl({
         if (onVideoChange) {
           await onVideoChange(result.video_id, result.jump_to.start_ms);
         } else if (onNavigate) {
-          onNavigate(result.video_id, result.jump_to.start_ms);
+          onNavigate(result.video_id, result.jump_to.start_ms, {
+            artifactType,
+            label,
+            query,
+            confidence: confidenceThreshold,
+          });
         } else {
           console.warn('GlobalJumpControl: Cross-video navigation attempted but no callback provided');
         }

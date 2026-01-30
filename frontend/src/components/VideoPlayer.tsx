@@ -52,6 +52,11 @@ export default function VideoPlayer({
   const [videoName, setVideoName] = useState<string>('');
   const [hasInitialSeeked, setHasInitialSeeked] = useState(false);
 
+  // Reset hasInitialSeeked when videoId changes (for cross-video navigation)
+  useEffect(() => {
+    setHasInitialSeeked(false);
+  }, [videoId]);
+
   /**
    * Handle cross-video navigation from GlobalJumpControl.
    * Loads a new video and seeks to the specified timestamp.

@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react';
 import GlobalJumpControl, { ArtifactType } from '../components/GlobalJumpControl';
 
 /**
@@ -54,59 +53,19 @@ export default function SearchPage({
   const label = initialState?.label || '';
   const query = initialState?.query || '';
   const confidence = initialState?.confidence || 0;
-  
-  // Earliest video ID for starting point when no video is loaded
-  const [earliestVideoId, setEarliestVideoId] = useState<string | null>(null);
-  const [loadingEarliest, setLoadingEarliest] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-
-  /**
-   * Fetch the earliest video in the library to use as starting point.
-   * This satisfies requirement 1.1.3: search from beginning of global timeline.
-   */
-  useEffect(() => {
-    const fetchEarliestVideo = async () => {
-      setLoadingEarliest(true);
-      setError(null);
-      
-      try {
-        const response = await fetch(
-          `${apiUrl}/api/v1/videos?sort=file_created_at&order=asc&limit=1`
-        );
-        
-        if (!response.ok) {
-          throw new Error(`Failed to fetch videos: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        
-        if (data.length > 0) {
-          setEarliestVideoId(data[0].video_id);
-        } else {
-          setError('No videos found in library');
-        }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Unknown error';
-        setError(`Failed to load video library: ${message}`);
-        console.error('Failed to fetch earliest video:', err);
-      } finally {
-        setLoadingEarliest(false);
-      }
-    };
-
-    fetchEarliestVideo();
-  }, [apiUrl]);
 
   /**
    * Handle navigation to a search result.
    * Passes form state to the player page for preservation.
    */
-  const handleNavigate = (videoId: string, timestampMs: number) => {
+  const handleNavigate = (videoId: string, timestampMs: number, formState: {
+    artifactType: ArtifactType;
+    label: string;
+    query: string;
+    confidence: number;
+  }) => {
     onNavigateToVideo(videoId, timestampMs, {
-      artifactType,
-      label,
-      query,
-      confidence,
+      ...formState,
       timestampMs,
     });
   };
@@ -154,7 +113,7 @@ export default function SearchPage({
               fontWeight: '600',
             }}
           >
-            Global Search
+            Jump Search
           </h2>
         </div>
       </div>
@@ -202,64 +161,27 @@ export default function SearchPage({
         </div>
 
         {/* Error display */}
-        {error && (
-          <div
-            style={{
-              maxWidth: '600px',
-              width: '100%',
-              padding: '16px',
-              backgroundColor: '#2a1a1a',
-              border: '1px solid #f44336',
-              borderRadius: '4px',
-              marginBottom: '24px',
-            }}
-          >
-            <p style={{ color: '#f44336', margin: 0, fontSize: '14px' }}>
-              {error}
-            </p>
-          </div>
-        )}
-
-        {/* Loading state */}
-        {loadingEarliest && (
-          <div
-            style={{
-              maxWidth: '600px',
-              width: '100%',
-              padding: '16px',
-              backgroundColor: '#2a2a2a',
-              borderRadius: '4px',
-              marginBottom: '24px',
-              textAlign: 'center',
-            }}
-          >
-            <p style={{ color: '#999', margin: 0, fontSize: '14px' }}>
-              Loading video library...
-            </p>
-          </div>
-        )}
+        {/* Errors will be shown by GlobalJumpControl */}
 
         {/* GlobalJumpControl - rendered without video context */}
-        {!loadingEarliest && earliestVideoId && (
-          <div
-            style={{
-              maxWidth: '600px',
-              width: '100%',
-              borderRadius: '8px',
-              overflow: 'hidden',
-              border: '1px solid #333',
-            }}
-          >
-            <GlobalJumpControl
-              apiUrl={apiUrl}
-              onNavigate={handleNavigate}
-              initialArtifactType={artifactType}
-              initialLabel={label}
-              initialQuery={query}
-              initialConfidence={confidence}
-            />
-          </div>
-        )}
+        <div
+          style={{
+            maxWidth: '600px',
+            width: '100%',
+            borderRadius: '8px',
+            overflow: 'hidden',
+            border: '1px solid #333',
+          }}
+        >
+          <GlobalJumpControl
+            apiUrl={apiUrl}
+            onNavigate={handleNavigate}
+            initialArtifactType={artifactType}
+            initialLabel={label}
+            initialQuery={query}
+            initialConfidence={confidence}
+          />
+        </div>
 
         {/* Instructions */}
         <div

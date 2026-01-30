@@ -366,11 +366,12 @@ async def global_jump(
         ),
         examples=["next", "prev"],
     ),
-    from_video_id: str = Query(
-        ...,
+    from_video_id: str | None = Query(
+        None,
         description=(
             "Starting video ID for the search. The search begins from this video's "
-            "position in the global timeline. Must be a valid, existing video ID."
+            "position in the global timeline. If omitted, search starts from the "
+            "beginning (for 'next') or end (for 'prev') of the global timeline."
         ),
         examples=["abc-123", "video_001"],
     ),
@@ -481,12 +482,12 @@ async def global_jump(
         404 Not Found: Specified from_video_id does not exist
         500 Internal Server Error: Unexpected server error
     """
-    # Validate from_video_id is non-empty
-    if not from_video_id or not from_video_id.strip():
-        logger.warning("Validation error: from_video_id is empty")
+    # Validate from_video_id is non-empty if provided
+    if from_video_id is not None and not from_video_id.strip():
+        logger.warning("Validation error: from_video_id is empty string")
         return create_error_response(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="from_video_id must be a non-empty string",
+            detail="from_video_id must be a non-empty string if provided",
             error_code=ERROR_CODES["INVALID_VIDEO_ID"],
         )
 
