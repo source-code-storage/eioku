@@ -178,10 +178,11 @@ export default function TaskStatusViewer({ videoId, apiUrl = 'http://localhost:8
   };
 
   /**
-   * Check if a task can be rerun (completed or failed, not pending/running).
+   * Check if a task can be retried (failed or cancelled only).
+   * Completed tasks cannot be retried - this matches the backend API.
    */
-  const canRerun = (status: string) => {
-    return status === 'completed' || status === 'failed';
+  const canRetry = (status: string) => {
+    return status === 'failed' || status === 'cancelled';
   };
 
   /**
@@ -269,7 +270,7 @@ export default function TaskStatusViewer({ videoId, apiUrl = 'http://localhost:8
               </span>
               {duration && <span style={{ color: '#999', marginLeft: '4px', fontSize: '10px' }}>({duration})</span>}
               
-              {canRerun(task.status) && (
+              {canRetry(task.status) && (
                 <div style={{ position: 'relative', marginLeft: '4px' }}>
                   <button
                     onClick={() => setOpenMenuTaskId(openMenuTaskId === task.task_id ? null : task.task_id)}
