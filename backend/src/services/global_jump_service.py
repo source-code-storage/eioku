@@ -1214,6 +1214,7 @@ class GlobalJumpService:
         direction: Literal["next", "prev"],
         from_video_id: str,
         from_ms: int,
+        query: str | None = None,
         geo_bounds: dict | None = None,
         limit: int = 1,
     ) -> list[GlobalJumpResult]:
@@ -1224,10 +1225,16 @@ class GlobalJumpService:
         data is per-video (not per-timestamp), so results point to the start of
         each video.
 
+        Supports text-based search on location fields (country, state, city) using
+        case-insensitive partial matching (ILIKE in PostgreSQL, LIKE with LOWER
+        in SQLite).
+
         Args:
             direction: Navigation direction ("next" for forward, "prev" for backward).
             from_video_id: Starting video ID for the search.
             from_ms: Starting timestamp in milliseconds (used for timeline position).
+            query: Optional text query to search across country, state, and city
+                   fields using case-insensitive partial matching.
             geo_bounds: Optional geographic bounds filter with keys:
                         min_lat, max_lat, min_lon, max_lon.
             limit: Maximum number of results to return (default 1).
@@ -1320,6 +1327,31 @@ class GlobalJumpService:
             if geo_conditions:
                 geo_filter = "AND " + " AND ".join(geo_conditions)
 
+        # Build text search filter if query is provided
+        # Uses case-insensitive partial matching on country, state, and city fields
+        text_filter = ""
+        if query:
+            bind = self.session.bind
+            is_postgresql = bind.dialect.name == "postgresql"
+            if is_postgresql:
+                # PostgreSQL: Use ILIKE for case-insensitive partial matching
+                text_filter = """
+                    AND (
+                        l.country ILIKE '%' || :query || '%'
+                        OR l.state ILIKE '%' || :query || '%'
+                        OR l.city ILIKE '%' || :query || '%'
+                    )
+                """
+            else:
+                # SQLite: Use LIKE with LOWER for case-insensitive matching
+                text_filter = """
+                    AND (
+                        LOWER(l.country) LIKE '%' || LOWER(:query) || '%'
+                        OR LOWER(l.state) LIKE '%' || LOWER(:query) || '%'
+                        OR LOWER(l.city) LIKE '%' || LOWER(:query) || '%'
+                    )
+                """
+
         sql = text(
             f"""
             SELECT
@@ -1338,6 +1370,7 @@ class GlobalJumpService:
             WHERE 1=1
             {direction_clause}
             {geo_filter}
+            {text_filter}
             {order_clause}
             LIMIT :limit
             """
@@ -1351,6 +1384,8 @@ class GlobalJumpService:
             params["current_file_created_at"] = current_file_created_at_param
         if geo_bounds:
             params.update(geo_bounds)
+        if query:
+            params["query"] = query
 
         rows = self.session.execute(sql, params).fetchall()
 
@@ -1378,7 +1413,7 @@ class GlobalJumpService:
         logger.debug(
             f"_search_locations_global: direction={direction}, "
             f"from_video_id={from_video_id}, from_ms={from_ms}, "
-            f"geo_bounds={geo_bounds}, found {len(results)} results"
+            f"query={query}, geo_bounds={geo_bounds}, found {len(results)} results"
         )
 
         return results
@@ -1492,6 +1527,7 @@ class GlobalJumpService:
                 direction="next",
                 from_video_id=from_video_id,
                 from_ms=from_ms,
+                query=query,
                 limit=limit,
             )
 
@@ -1607,6 +1643,7 @@ class GlobalJumpService:
                 direction="prev",
                 from_video_id=from_video_id,
                 from_ms=from_ms,
+                query=query,
                 limit=limit,
             )
 

@@ -10,17 +10,39 @@ import ObjectDetectionViewer from './ObjectDetectionViewer';
 import OCRViewer from './OCRViewer';
 import PlaceDetectionViewer from './PlaceDetectionViewer';
 import MetadataViewer from './MetadataViewer';
-import JumpNavigationControl from './JumpNavigationControl';
+import GlobalJumpControl, { ArtifactType } from './GlobalJumpControl';
 
 interface Props {
   videoId: string;
   apiUrl?: string;
   onBack: () => void;
+  /** Initial timestamp to seek to when video loads (in milliseconds) */
+  initialTimestampMs?: number;
+  /** Initial artifact type from search page (for form state preservation) */
+  initialArtifactType?: ArtifactType;
+  /** Initial label from search page (for form state preservation) */
+  initialLabel?: string;
+  /** Initial query from search page (for form state preservation) */
+  initialQuery?: string;
+  /** Initial confidence from search page (for form state preservation) */
+  initialConfidence?: number;
+  /** Callback to change to a different video (for cross-video navigation) */
+  onVideoChange?: (videoId: string, timestampMs: number) => void;
 }
 
 type ArtifactView = 'scenes' | 'transcript' | 'objects' | 'ocr' | 'places' | 'faces' | 'metadata';
 
-export default function VideoPlayer({ videoId, apiUrl = 'http://localhost:8080', onBack }: Props) {
+export default function VideoPlayer({ 
+  videoId, 
+  apiUrl = 'http://localhost:8080', 
+  onBack, 
+  initialTimestampMs,
+  initialArtifactType,
+  initialLabel,
+  initialQuery,
+  initialConfidence,
+  onVideoChange,
+}: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [activeView, setActiveView] = useState<ArtifactView>('transcript');
@@ -28,6 +50,21 @@ export default function VideoPlayer({ videoId, apiUrl = 'http://localhost:8080',
   const [showObjects, setShowObjects] = useState(false);
   const [showOCR, setShowOCR] = useState(false);
   const [videoName, setVideoName] = useState<string>('');
+  const [hasInitialSeeked, setHasInitialSeeked] = useState(false);
+
+  /**
+   * Handle cross-video navigation from GlobalJumpControl.
+   * Loads a new video and seeks to the specified timestamp.
+   * Requirements: 1.2, 6.2, 6.3
+   */
+  const handleVideoChange = async (newVideoId: string, timestampMs: number): Promise<void> => {
+    if (onVideoChange) {
+      // Delegate to parent component to handle video change
+      onVideoChange(newVideoId, timestampMs);
+    } else {
+      console.warn('VideoPlayer: onVideoChange callback not provided for cross-video navigation');
+    }
+  };
 
   useEffect(() => {
     fetch(`${apiUrl}/api/v1/videos/${videoId}`)
@@ -40,6 +77,33 @@ export default function VideoPlayer({ videoId, apiUrl = 'http://localhost:8080',
         setVideoName('Video');
       });
   }, [videoId, apiUrl]);
+
+  /**
+   * Seek to initial timestamp when video loads (Requirement 1.1.4).
+   * This handles navigation from search page with a specific timestamp.
+   */
+  useEffect(() => {
+    if (initialTimestampMs !== undefined && !hasInitialSeeked && videoRef.current) {
+      const handleCanPlay = () => {
+        if (videoRef.current && !hasInitialSeeked) {
+          videoRef.current.currentTime = initialTimestampMs / 1000;
+          setHasInitialSeeked(true);
+        }
+      };
+
+      const video = videoRef.current;
+      
+      // If video is already ready, seek immediately
+      if (video.readyState >= 3) {
+        video.currentTime = initialTimestampMs / 1000;
+        setHasInitialSeeked(true);
+      } else {
+        // Otherwise wait for canplay event
+        video.addEventListener('canplay', handleCanPlay);
+        return () => video.removeEventListener('canplay', handleCanPlay);
+      }
+    }
+  }, [initialTimestampMs, hasInitialSeeked]);
 
   useEffect(() => {
     // Push a new history state when entering the video player
@@ -145,8 +209,17 @@ export default function VideoPlayer({ videoId, apiUrl = 'http://localhost:8080',
           />
         </div>
 
-        {/* Jump navigation control */}
-        <JumpNavigationControl videoId={videoId} videoRef={videoRef} apiUrl={apiUrl} />
+        {/* Global jump navigation control - replaces JumpNavigationControl */}
+        <GlobalJumpControl 
+          videoId={videoId} 
+          videoRef={videoRef} 
+          apiUrl={apiUrl}
+          onVideoChange={handleVideoChange}
+          initialArtifactType={initialArtifactType}
+          initialLabel={initialLabel}
+          initialQuery={initialQuery}
+          initialConfidence={initialConfidence}
+        />
 
         {/* Artifact tabs */}
         <div
