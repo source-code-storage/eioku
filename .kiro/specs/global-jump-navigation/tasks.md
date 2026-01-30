@@ -226,7 +226,7 @@ The implementation follows a bottom-up approach: start with data models and serv
   - **Property 14: Optional from_ms Parameter**
   - **Validates: Requirements 11.5**
 
-- [ ] 17. Implement boundary condition handling for from_ms
+- [x] 17. Implement boundary condition handling for from_ms
   - Update GlobalJumpService to handle from_ms beyond video duration
   - Treat from_ms > duration as end of video for "next" direction
   - Treat from_ms > duration as end of video for "prev" direction
@@ -237,7 +237,7 @@ The implementation follows a bottom-up approach: start with data models and serv
   - **Property 15: Boundary Condition - from_ms Beyond Duration**
   - **Validates: Requirements 11.4**
 
-- [ ] 18. Implement arbitrary position navigation
+- [x] 18. Implement arbitrary position navigation
   - Verify GlobalJumpService correctly handles any from_video_id and from_ms combination
   - Results should be chronologically after (for "next") or before (for "prev") that position
   - Test with various video orderings and timestamps
@@ -247,7 +247,7 @@ The implementation follows a bottom-up approach: start with data models and serv
   - **Property 13: Arbitrary Position Navigation**
   - **Validates: Requirements 11.1, 11.2, 11.3**
 
-- [ ] 19. Implement filter change independence
+- [x] 19. Implement filter change independence
   - Verify that changing filters (label, query, kind) doesn't affect timeline position
   - Each query is independent and doesn't carry state from previous queries
   - Test with multiple consecutive queries with different filters
@@ -257,7 +257,7 @@ The implementation follows a bottom-up approach: start with data models and serv
   - **Property 16: Filter Change Independence**
   - **Validates: Requirements 12.1, 12.2, 12.3, 12.4**
 
-- [ ] 20. Implement result chaining capability
+- [x] 20. Implement result chaining capability
   - Verify that using a result's video_id and end_ms as the next starting point works correctly
   - Results should be chronologically after the previous result
   - Test continuous navigation through multiple results
@@ -267,7 +267,7 @@ The implementation follows a bottom-up approach: start with data models and serv
   - **Property 17: Result Chaining**
   - **Validates: Requirements 13.5, 14.2, 14.3**
 
-- [ ] 21. Implement cross-video navigation correctness
+- [x] 21. Implement cross-video navigation correctness
   - Verify that results from different videos are the first matching artifacts in the next/previous video
   - Test with multiple videos in different chronological orders
   - Verify video_id in results matches expected video
@@ -277,7 +277,7 @@ The implementation follows a bottom-up approach: start with data models and serv
   - **Property 18: Cross-Video Navigation**
   - **Validates: Requirements 14.1, 14.5**
 
-- [ ] 22. Verify backward compatibility with single-video jump
+- [x] 22. Verify backward compatibility with single-video jump
   - Ensure existing GET /videos/{video_id}/jump endpoint still works
   - Verify single-video jump returns results scoped to that video only
   - Verify new global jump doesn't affect single-video jump behavior
@@ -288,7 +288,7 @@ The implementation follows a bottom-up approach: start with data models and serv
   - **Property 20: Global Jump Independence**
   - **Validates: Requirements 10.1, 10.2, 10.3, 10.4**
 
-- [ ] 23. Checkpoint - Ensure all unit and property tests pass
+- [x] 23. Checkpoint - Ensure all unit and property tests pass
   - Run all unit tests: `cd backend && poetry run pytest tests/global_jump/ -v`
   - Run all property tests: `cd backend && poetry run pytest tests/global_jump/ -v -k property`
   - Verify 100% test pass rate
@@ -296,7 +296,7 @@ The implementation follows a bottom-up approach: start with data models and serv
   - Ensure all tests complete within reasonable time
   - _Requirements: All_
 
-- [ ] 24. Add composite database indexes for optimization
+- [x] 24. Add composite database indexes for optimization
   - Create migration file: `backend/alembic/versions/xxx_add_global_jump_indexes.py`
   - Add index on object_labels(label, asset_id, start_ms)
   - Add index on face_clusters(cluster_id, asset_id, start_ms)
@@ -311,14 +311,14 @@ The implementation follows a bottom-up approach: start with data models and serv
   - Test transcript search completes within 500ms
   - _Requirements: 9.1_
 
-- [ ] 25. Register GlobalJumpRouter in main application
+- [x] 25. Register GlobalJumpRouter in main application
   - Import GlobalJumpRouter in `backend/src/main.py`
   - Register router with app: `app.include_router(global_jump_router)`
   - Verify endpoint is accessible at GET /jump/global
   - Test endpoint with curl or API client
   - _Requirements: 5.1_
 
-- [ ] 26. Add comprehensive API documentation
+- [-] 26. Add comprehensive API documentation
   - Add docstrings to all endpoint handlers
   - Add response examples to OpenAPI schema
   - Document all query parameters with descriptions

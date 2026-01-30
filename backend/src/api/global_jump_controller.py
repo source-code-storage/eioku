@@ -68,15 +68,113 @@ def get_global_jump_service(session: Session = Depends(get_db)) -> GlobalJumpSer
     "/global",
     response_model=GlobalJumpResponseSchema,
     summary="Global Jump Navigation",
-    description="Navigate across videos to find artifacts in chronological order.",
+    description="""Navigate across videos to find artifacts in chronological order.
+
+This endpoint enables cross-video artifact search and navigation using a unified API.
+Users can search for objects, faces, text (transcript/OCR), scenes, places, and
+locations across their entire video library in chronological order based on
+file_created_at (EXIF/filesystem date).
+
+**Supported artifact kinds:**
+- `object`: Search by detected object labels (e.g., "dog", "car")
+- `face`: Search by face cluster ID
+- `transcript`: Full-text search in video transcripts
+- `ocr`: Full-text search in detected on-screen text
+- `scene`: Navigate between scene boundaries
+- `place`: Search by detected place labels
+- `location`: Search by GPS location data
+
+**Navigation directions:**
+- `next`: Find artifacts chronologically after the current position
+- `prev`: Find artifacts chronologically before the current position
+
+**Result chaining:**
+To navigate through all occurrences, use the returned `video_id` and `end_ms`
+as the `from_video_id` and `from_ms` for the next query.
+""",
     responses={
-        200: {"description": "Successful response", "model": GlobalJumpResponseSchema},
+        200: {
+            "description": "Successful response with matching artifacts",
+            "model": GlobalJumpResponseSchema,
+            "content": {
+                "application/json": {
+                    "example": {
+                        "results": [
+                            {
+                                "video_id": "abc-123",
+                                "video_filename": "beach_trip.mp4",
+                                "file_created_at": "2025-05-19T02:22:21Z",
+                                "jump_to": {"start_ms": 15000, "end_ms": 15500},
+                                "artifact_id": "artifact_xyz",
+                                "preview": {"label": "dog", "confidence": 0.95},
+                            }
+                        ],
+                        "has_more": True,
+                    }
+                }
+            },
+        },
         400: {
             "description": "Invalid request parameters",
             "model": ErrorResponseSchema,
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "invalid_kind": {
+                            "summary": "Invalid artifact kind",
+                            "value": {
+                                "detail": "Invalid artifact kind. Must be one of: "
+                                "face, location, object, ocr, place, scene, transcript",
+                                "error_code": "INVALID_KIND",
+                                "timestamp": "2025-05-19T02:22:21Z",
+                            },
+                        },
+                        "invalid_direction": {
+                            "summary": "Invalid direction",
+                            "value": {
+                                "detail": "Direction must be 'next' or 'prev'",
+                                "error_code": "INVALID_DIRECTION",
+                                "timestamp": "2025-05-19T02:22:21Z",
+                            },
+                        },
+                        "conflicting_filters": {
+                            "summary": "Conflicting filters",
+                            "value": {
+                                "detail": "Cannot specify both label and query",
+                                "error_code": "CONFLICTING_FILTERS",
+                                "timestamp": "2025-05-19T02:22:21Z",
+                            },
+                        },
+                    }
+                }
+            },
         },
-        404: {"description": "Video not found", "model": ErrorResponseSchema},
-        500: {"description": "Internal server error", "model": ErrorResponseSchema},
+        404: {
+            "description": "Video not found",
+            "model": ErrorResponseSchema,
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Video not found",
+                        "error_code": "VIDEO_NOT_FOUND",
+                        "timestamp": "2025-05-19T02:22:21Z",
+                    }
+                }
+            },
+        },
+        500: {
+            "description": "Internal server error",
+            "model": ErrorResponseSchema,
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "An unexpected error occurred",
+                        "error_code": "INTERNAL_ERROR",
+                        "timestamp": "2025-05-19T02:22:21Z",
+                    }
+                }
+            },
+        },
     },
 )
 async def global_jump(
