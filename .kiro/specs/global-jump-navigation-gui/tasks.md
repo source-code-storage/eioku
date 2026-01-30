@@ -124,7 +124,7 @@ Tasks for implementing the Global Jump Navigation GUI, including the frontend co
   - Validate video exists and timestamp range
   - _Requirements: 11.4_
 
-- [ ]* 18. Implement ffmpeg clip extraction
+- [x] 18. Implement ffmpeg clip extraction
   - Build ffmpeg command with stream copy
   - Use fragmented MP4 for streaming output
   - Stream output directly to response
