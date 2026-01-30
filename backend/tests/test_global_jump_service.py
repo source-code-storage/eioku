@@ -4697,3 +4697,566 @@ class TestCrossVideoNavigationCorrectness:
         # Should return the artifact with the latest start_ms (5000)
         assert results[0].artifact_id == "v1_obj_5000"
         assert results[0].jump_to.start_ms == 5000
+
+
+class TestLocationTextSearch:
+    """Tests for location text search functionality.
+
+    Validates Requirements:
+    - 7.1: WHEN kind is location and a query parameter is provided,
+           THE Global_Jump_Service SHALL search across country, state, and city fields
+    - 7.2: THE location text search SHALL use case-insensitive partial matching
+    - 7.3: THE location text search SHALL match if the query appears in any of:
+           country, state, or city
+    - 7.4: WHEN both query and geo_bounds are provided for location search,
+           THE Global_Jump_Service SHALL apply both filters (AND logic)
+    """
+
+    @pytest.fixture
+    def setup_video_locations(self, session):
+        """Set up video_locations table for testing."""
+        session.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS video_locations (
+                    id INTEGER PRIMARY KEY,
+                    video_id TEXT NOT NULL UNIQUE,
+                    artifact_id TEXT NOT NULL,
+                    latitude REAL NOT NULL,
+                    longitude REAL NOT NULL,
+                    altitude REAL,
+                    country TEXT,
+                    state TEXT,
+                    city TEXT
+                )
+                """
+            )
+        )
+        session.commit()
+        yield
+        session.execute(text("DROP TABLE IF EXISTS video_locations"))
+        session.commit()
+
+    def _insert_location(
+        self,
+        session,
+        video_id: str,
+        artifact_id: str,
+        latitude: float,
+        longitude: float,
+        altitude: float | None = None,
+        country: str | None = None,
+        state: str | None = None,
+        city: str | None = None,
+    ):
+        """Helper to insert location into video_locations table."""
+        session.execute(
+            text(
+                """
+                INSERT INTO video_locations
+                    (video_id, artifact_id, latitude, longitude, altitude,
+                     country, state, city)
+                VALUES (:video_id, :artifact_id, :latitude, :longitude, :altitude,
+                        :country, :state, :city)
+                """
+            ),
+            {
+                "video_id": video_id,
+                "artifact_id": artifact_id,
+                "latitude": latitude,
+                "longitude": longitude,
+                "altitude": altitude,
+                "country": country,
+                "state": state,
+                "city": city,
+            },
+        )
+        session.commit()
+
+    def test_search_matching_country_field(
+        self, session, global_jump_service, setup_video_locations
+    ):
+        """Test that query matches against country field.
+
+        Validates: Requirements 7.1, 7.3
+        """
+        video1 = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        video2 = create_test_video(
+            session, "video_2", "video2.mp4", datetime(2025, 1, 2, 12, 0, 0)
+        )
+        video3 = create_test_video(
+            session, "video_3", "video3.mp4", datetime(2025, 1, 3, 12, 0, 0)
+        )
+
+        self._insert_location(
+            session,
+            video2.video_id,
+            "loc_2",
+            35.6762,
+            139.6503,
+            country="Japan",
+            state="Tokyo",
+            city="Shibuya",
+        )
+        self._insert_location(
+            session,
+            video3.video_id,
+            "loc_3",
+            40.7128,
+            -74.0060,
+            country="United States",
+            state="New York",
+            city="Manhattan",
+        )
+
+        results = global_jump_service._search_locations_global(
+            direction="next",
+            from_video_id=video1.video_id,
+            from_ms=0,
+            query="Japan",
+        )
+
+        assert len(results) == 1
+        assert results[0].video_id == "video_2"
+        assert results[0].preview["country"] == "Japan"
+
+    def test_search_matching_state_field(
+        self, session, global_jump_service, setup_video_locations
+    ):
+        """Test that query matches against state field.
+
+        Validates: Requirements 7.1, 7.3
+        """
+        video1 = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        video2 = create_test_video(
+            session, "video_2", "video2.mp4", datetime(2025, 1, 2, 12, 0, 0)
+        )
+        video3 = create_test_video(
+            session, "video_3", "video3.mp4", datetime(2025, 1, 3, 12, 0, 0)
+        )
+
+        self._insert_location(
+            session,
+            video2.video_id,
+            "loc_2",
+            34.0522,
+            -118.2437,
+            country="United States",
+            state="California",
+            city="Los Angeles",
+        )
+        self._insert_location(
+            session,
+            video3.video_id,
+            "loc_3",
+            40.7128,
+            -74.0060,
+            country="United States",
+            state="New York",
+            city="Manhattan",
+        )
+
+        results = global_jump_service._search_locations_global(
+            direction="next",
+            from_video_id=video1.video_id,
+            from_ms=0,
+            query="California",
+        )
+
+        assert len(results) == 1
+        assert results[0].video_id == "video_2"
+        assert results[0].preview["state"] == "California"
+
+    def test_search_matching_city_field(
+        self, session, global_jump_service, setup_video_locations
+    ):
+        """Test that query matches against city field.
+
+        Validates: Requirements 7.1, 7.3
+        """
+        video1 = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        video2 = create_test_video(
+            session, "video_2", "video2.mp4", datetime(2025, 1, 2, 12, 0, 0)
+        )
+        video3 = create_test_video(
+            session, "video_3", "video3.mp4", datetime(2025, 1, 3, 12, 0, 0)
+        )
+
+        self._insert_location(
+            session,
+            video2.video_id,
+            "loc_2",
+            35.6762,
+            139.6503,
+            country="Japan",
+            state="Tokyo",
+            city="Shibuya",
+        )
+        self._insert_location(
+            session,
+            video3.video_id,
+            "loc_3",
+            51.5074,
+            -0.1278,
+            country="United Kingdom",
+            state="England",
+            city="London",
+        )
+
+        results = global_jump_service._search_locations_global(
+            direction="next",
+            from_video_id=video1.video_id,
+            from_ms=0,
+            query="London",
+        )
+
+        assert len(results) == 1
+        assert results[0].video_id == "video_3"
+        assert results[0].preview["city"] == "London"
+
+    def test_case_insensitive_matching(
+        self, session, global_jump_service, setup_video_locations
+    ):
+        """Test that query matching is case-insensitive.
+
+        Validates: Requirements 7.2
+        """
+        video1 = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        video2 = create_test_video(
+            session, "video_2", "video2.mp4", datetime(2025, 1, 2, 12, 0, 0)
+        )
+
+        self._insert_location(
+            session,
+            video2.video_id,
+            "loc_2",
+            35.6762,
+            139.6503,
+            country="Japan",
+            state="Tokyo",
+            city="Shibuya",
+        )
+
+        # Test lowercase query matching uppercase data
+        results_lower = global_jump_service._search_locations_global(
+            direction="next",
+            from_video_id=video1.video_id,
+            from_ms=0,
+            query="japan",
+        )
+        assert len(results_lower) == 1
+        assert results_lower[0].preview["country"] == "Japan"
+
+        # Test uppercase query matching mixed case data
+        results_upper = global_jump_service._search_locations_global(
+            direction="next",
+            from_video_id=video1.video_id,
+            from_ms=0,
+            query="TOKYO",
+        )
+        assert len(results_upper) == 1
+        assert results_upper[0].preview["state"] == "Tokyo"
+
+        # Test mixed case query
+        results_mixed = global_jump_service._search_locations_global(
+            direction="next",
+            from_video_id=video1.video_id,
+            from_ms=0,
+            query="ShIbUyA",
+        )
+        assert len(results_mixed) == 1
+        assert results_mixed[0].preview["city"] == "Shibuya"
+
+    def test_partial_matching(
+        self, session, global_jump_service, setup_video_locations
+    ):
+        """Test that query uses partial matching (substring search).
+
+        Validates: Requirements 7.2
+        """
+        video1 = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        video2 = create_test_video(
+            session, "video_2", "video2.mp4", datetime(2025, 1, 2, 12, 0, 0)
+        )
+
+        self._insert_location(
+            session,
+            video2.video_id,
+            "loc_2",
+            40.7128,
+            -74.0060,
+            country="United States",
+            state="New York",
+            city="Manhattan",
+        )
+
+        # Test partial match on country
+        results_country = global_jump_service._search_locations_global(
+            direction="next",
+            from_video_id=video1.video_id,
+            from_ms=0,
+            query="United",
+        )
+        assert len(results_country) == 1
+        assert results_country[0].preview["country"] == "United States"
+
+        # Test partial match on state
+        results_state = global_jump_service._search_locations_global(
+            direction="next",
+            from_video_id=video1.video_id,
+            from_ms=0,
+            query="York",
+        )
+        assert len(results_state) == 1
+        assert results_state[0].preview["state"] == "New York"
+
+        # Test partial match on city
+        results_city = global_jump_service._search_locations_global(
+            direction="next",
+            from_video_id=video1.video_id,
+            from_ms=0,
+            query="Man",
+        )
+        assert len(results_city) == 1
+        assert results_city[0].preview["city"] == "Manhattan"
+
+    def test_combined_query_and_geo_bounds_filtering(
+        self, session, global_jump_service, setup_video_locations
+    ):
+        """Test that both query and geo_bounds filters are applied (AND logic).
+
+        Validates: Requirements 7.4
+        """
+        video1 = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        video2 = create_test_video(
+            session, "video_2", "video2.mp4", datetime(2025, 1, 2, 12, 0, 0)
+        )
+        video3 = create_test_video(
+            session, "video_3", "video3.mp4", datetime(2025, 1, 3, 12, 0, 0)
+        )
+        video4 = create_test_video(
+            session, "video_4", "video4.mp4", datetime(2025, 1, 4, 12, 0, 0)
+        )
+
+        # Tokyo, Japan (lat ~35.6, lon ~139.6)
+        self._insert_location(
+            session,
+            video2.video_id,
+            "loc_2",
+            35.6762,
+            139.6503,
+            country="Japan",
+            state="Tokyo",
+            city="Shibuya",
+        )
+        # New York, USA (lat ~40.7, lon ~-74.0) - matches "New" but outside bounds
+        self._insert_location(
+            session,
+            video3.video_id,
+            "loc_3",
+            40.7128,
+            -74.0060,
+            country="United States",
+            state="New York",
+            city="Manhattan",
+        )
+        # Osaka, Japan (lat ~34.6, lon ~135.5) - matches "Japan" and inside bounds
+        self._insert_location(
+            session,
+            video4.video_id,
+            "loc_4",
+            34.6937,
+            135.5023,
+            country="Japan",
+            state="Osaka",
+            city="Osaka",
+        )
+
+        # Search for "Japan" within bounds that include Tokyo and Osaka
+        # but exclude New York
+        geo_bounds = {
+            "min_lat": 30.0,
+            "max_lat": 40.0,
+            "min_lon": 130.0,
+            "max_lon": 145.0,
+        }
+
+        results = global_jump_service._search_locations_global(
+            direction="next",
+            from_video_id=video1.video_id,
+            from_ms=0,
+            query="Japan",
+            geo_bounds=geo_bounds,
+            limit=10,
+        )
+
+        # Should find both Tokyo and Osaka (both match "Japan" and are in bounds)
+        assert len(results) == 2
+        video_ids = [r.video_id for r in results]
+        assert "video_2" in video_ids  # Tokyo
+        assert "video_4" in video_ids  # Osaka
+        assert "video_3" not in video_ids  # New York excluded
+
+    def test_query_matches_any_field(
+        self, session, global_jump_service, setup_video_locations
+    ):
+        """Test that query matches if it appears in ANY of country, state, or city.
+
+        Validates: Requirements 7.3
+        """
+        video1 = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        video2 = create_test_video(
+            session, "video_2", "video2.mp4", datetime(2025, 1, 2, 12, 0, 0)
+        )
+        video3 = create_test_video(
+            session, "video_3", "video3.mp4", datetime(2025, 1, 3, 12, 0, 0)
+        )
+        video4 = create_test_video(
+            session, "video_4", "video4.mp4", datetime(2025, 1, 4, 12, 0, 0)
+        )
+
+        # "New" appears in country
+        self._insert_location(
+            session,
+            video2.video_id,
+            "loc_2",
+            0.0,
+            0.0,
+            country="New Zealand",
+            state="Auckland",
+            city="Auckland",
+        )
+        # "New" appears in state
+        self._insert_location(
+            session,
+            video3.video_id,
+            "loc_3",
+            0.0,
+            0.0,
+            country="United States",
+            state="New York",
+            city="Buffalo",
+        )
+        # "New" appears in city
+        self._insert_location(
+            session,
+            video4.video_id,
+            "loc_4",
+            0.0,
+            0.0,
+            country="United States",
+            state="Louisiana",
+            city="New Orleans",
+        )
+
+        results = global_jump_service._search_locations_global(
+            direction="next",
+            from_video_id=video1.video_id,
+            from_ms=0,
+            query="New",
+            limit=10,
+        )
+
+        # Should find all three locations
+        assert len(results) == 3
+        video_ids = [r.video_id for r in results]
+        assert "video_2" in video_ids  # New Zealand (country)
+        assert "video_3" in video_ids  # New York (state)
+        assert "video_4" in video_ids  # New Orleans (city)
+
+    def test_query_no_match_returns_empty(
+        self, session, global_jump_service, setup_video_locations
+    ):
+        """Test that non-matching query returns empty results.
+
+        Validates: Requirements 7.1
+        """
+        video1 = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        video2 = create_test_video(
+            session, "video_2", "video2.mp4", datetime(2025, 1, 2, 12, 0, 0)
+        )
+
+        self._insert_location(
+            session,
+            video2.video_id,
+            "loc_2",
+            35.6762,
+            139.6503,
+            country="Japan",
+            state="Tokyo",
+            city="Shibuya",
+        )
+
+        results = global_jump_service._search_locations_global(
+            direction="next",
+            from_video_id=video1.video_id,
+            from_ms=0,
+            query="NonExistentPlace",
+        )
+
+        assert len(results) == 0
+
+    def test_query_with_prev_direction(
+        self, session, global_jump_service, setup_video_locations
+    ):
+        """Test that query works with prev direction.
+
+        Validates: Requirements 7.1
+        """
+        video1 = create_test_video(
+            session, "video_1", "video1.mp4", datetime(2025, 1, 1, 12, 0, 0)
+        )
+        video2 = create_test_video(
+            session, "video_2", "video2.mp4", datetime(2025, 1, 2, 12, 0, 0)
+        )
+        video3 = create_test_video(
+            session, "video_3", "video3.mp4", datetime(2025, 1, 3, 12, 0, 0)
+        )
+
+        self._insert_location(
+            session,
+            video1.video_id,
+            "loc_1",
+            35.6762,
+            139.6503,
+            country="Japan",
+            state="Tokyo",
+            city="Shibuya",
+        )
+        self._insert_location(
+            session,
+            video2.video_id,
+            "loc_2",
+            40.7128,
+            -74.0060,
+            country="United States",
+            state="New York",
+            city="Manhattan",
+        )
+
+        results = global_jump_service._search_locations_global(
+            direction="prev",
+            from_video_id=video3.video_id,
+            from_ms=0,
+            query="Japan",
+        )
+
+        assert len(results) == 1
+        assert results[0].video_id == "video_1"
+        assert results[0].preview["country"] == "Japan"
