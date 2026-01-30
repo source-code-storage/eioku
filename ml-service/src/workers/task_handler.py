@@ -97,6 +97,7 @@ async def process_ml_task(
             "place_detection": "places",
             "scene_detection": "scenes",
             "metadata_extraction": "metadata",
+            "thumbnail_extraction": "thumbnails",
         }
         endpoint = task_to_endpoint.get(task_type)
         if not endpoint:
@@ -123,6 +124,41 @@ async def process_ml_task(
             await _update_video_file_created_at(
                 session, task.video_id, result, video_path
             )
+        elif task_type == "thumbnail_extraction":
+            # Thumbnail extraction is different - it generates files, not artifacts
+            from src.workers.thumbnail_extractor import (
+                collect_artifact_timestamps,
+                extract_frame_with_ffmpeg,
+                generate_thumbnails_idempotent,
+            )
+
+            # Collect unique timestamps from artifacts for this video
+            timestamps = collect_artifact_timestamps(video_id, session)
+
+            # Generate thumbnails idempotently (skips existing)
+            stats = generate_thumbnails_idempotent(
+                video_id=video_id,
+                video_path=video_path,
+                timestamps=timestamps,
+                extract_frame_fn=extract_frame_with_ffmpeg,
+            )
+
+            logger.info(
+                f"🖼️ Thumbnail extraction complete for {video_id}: "
+                f"generated={stats.generated}, skipped={stats.skipped}, "
+                f"failed={stats.failed}"
+            )
+
+            # Mark task as completed and return early (no artifacts to persist)
+            task.status = "completed"
+            task.completed_at = datetime.utcnow()
+            session.commit()
+
+            return {
+                "task_id": task_id,
+                "status": "completed",
+                "thumbnail_stats": stats.to_dict(),
+            }
         else:
             raise ValueError(f"Unknown task type: {task_type}")
 

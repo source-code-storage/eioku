@@ -42,7 +42,7 @@ This document specifies the requirements for artifact thumbnail generation and a
 
 #### Acceptance Criteria
 
-1. THE backend SHALL provide a `GET /api/v1/thumbnails/{video_id}/{timestamp_ms}` endpoint
+1. THE backend SHALL provide a `GET /v1/thumbnails/{video_id}/{timestamp_ms}` endpoint
 2. WHEN the thumbnail exists, THE endpoint SHALL return the WebP file with appropriate content type
 3. WHEN the thumbnail does not exist, THE endpoint SHALL return 404
 4. THE endpoint SHALL set appropriate cache headers for browser caching (e.g., 1 week)
@@ -54,13 +54,15 @@ This document specifies the requirements for artifact thumbnail generation and a
 #### Acceptance Criteria
 
 1. THE backend SHALL provide a `GET /api/v1/artifacts/search` endpoint for gallery-style artifact search
-2. THE endpoint SHALL accept parameters: `kind`, `label`, `query`, `min_confidence`, `filename`, `limit`, `offset`
+2. THE endpoint SHALL accept parameters: `kind`, `label`, `query`, `min_confidence`, `filename`, `limit`, `offset`, `group_by_video`
 3. THE endpoint SHALL return results ordered by global timeline (file_created_at, video_id, start_ms)
 4. EACH result SHALL include: `video_id`, `artifact_id`, `start_ms`, `thumbnail_url`, `preview`, `video_filename`
 5. THE `thumbnail_url` SHALL point to the thumbnail serving endpoint for that artifact's timestamp
 6. THE endpoint SHALL support pagination via `limit` and `offset` parameters
 7. THE endpoint SHALL return total count of matching artifacts for pagination UI
 8. WHEN `filename` parameter is provided, THE endpoint SHALL filter results to videos whose filename contains the search string (case-insensitive)
+9. WHEN `group_by_video` is true, THE endpoint SHALL return only the first matching artifact per video (collapsed view)
+10. WHEN `group_by_video` is true, EACH result SHALL include `artifact_count` indicating total matches in that video
 
 ### Requirement 5: Artifact Gallery UI Component
 
@@ -88,6 +90,8 @@ This document specifies the requirements for artifact thumbnail generation and a
 4. THE search form SHALL include a filename filter input to search within specific videos
 5. WHEN the user submits the search form, THE gallery SHALL update to show matching results
 6. THE search form state SHALL be preserved in the URL for shareable links
+7. THE search form SHALL include a "Group by video" toggle to collapse results by video
+8. WHEN "Group by video" is enabled, THE gallery SHALL show one thumbnail per video with artifact count badge
 
 ### Requirement 7: Thumbnail Fallback
 

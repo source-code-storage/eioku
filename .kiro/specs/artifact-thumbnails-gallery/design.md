@@ -251,6 +251,7 @@ class ArtifactSearchResult(BaseModel):
     preview: dict
     video_filename: str
     file_created_at: str
+    artifact_count: int | None = None  # Only present when group_by_video=true
 
 class ArtifactSearchResponse(BaseModel):
     results: list[ArtifactSearchResult]
@@ -267,12 +268,14 @@ async def search_artifacts(
     min_confidence: float | None = Query(None, ge=0, le=1),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
+    group_by_video: bool = Query(False, description="Collapse results to one per video"),
     session: Session = Depends(get_db),
 ) -> ArtifactSearchResponse:
     """
     Search artifacts across all videos with pagination.
     
     Returns results ordered by global timeline with thumbnail URLs.
+    When group_by_video=true, returns one result per video with artifact_count.
     """
     # Map kind to artifact_type
     type_map = {
@@ -285,20 +288,42 @@ async def search_artifacts(
     }
     artifact_type = type_map.get(kind)
     
-    # Build query
-    base_query = """
-        SELECT 
-            a.artifact_id,
-            a.video_id,
-            a.artifact_type,
-            COALESCE((a.payload->>'start_ms')::int, 0) as start_ms,
-            a.payload as preview,
-            v.filename as video_filename,
-            v.file_created_at
-        FROM artifacts a
-        JOIN videos v ON v.video_id = a.video_id
-        WHERE a.artifact_type = :artifact_type
-    """
+    # Build base query - different for grouped vs ungrouped
+    if group_by_video:
+        # Grouped: Use window function to get first artifact per video + count
+        base_query = """
+            WITH ranked AS (
+                SELECT 
+                    a.artifact_id,
+                    a.video_id,
+                    a.artifact_type,
+                    COALESCE((a.payload->>'start_ms')::int, 0) as start_ms,
+                    a.payload as preview,
+                    v.filename as video_filename,
+                    v.file_created_at,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY a.video_id 
+                        ORDER BY COALESCE((a.payload->>'start_ms')::int, 0) ASC
+                    ) as rn,
+                    COUNT(*) OVER (PARTITION BY a.video_id) as artifact_count
+                FROM artifacts a
+                JOIN videos v ON v.video_id = a.video_id
+                WHERE a.artifact_type = :artifact_type
+        """
+    else:
+        base_query = """
+            SELECT 
+                a.artifact_id,
+                a.video_id,
+                a.artifact_type,
+                COALESCE((a.payload->>'start_ms')::int, 0) as start_ms,
+                a.payload as preview,
+                v.filename as video_filename,
+                v.file_created_at
+            FROM artifacts a
+            JOIN videos v ON v.video_id = a.video_id
+            WHERE a.artifact_type = :artifact_type
+        """
     
     params = {"artifact_type": artifact_type}
     
@@ -319,8 +344,29 @@ async def search_artifacts(
         base_query += " AND (a.payload->>'confidence')::float >= :min_confidence"
         params["min_confidence"] = min_confidence
     
+    # Handle grouped query completion
+    if group_by_video:
+        base_query += """
+            )
+            SELECT artifact_id, video_id, artifact_type, start_ms, preview, 
+                   video_filename, file_created_at, artifact_count
+            FROM ranked WHERE rn = 1
+        """
+    
     # Count total
-    count_query = f"SELECT COUNT(*) FROM ({base_query}) sub"
+    if group_by_video:
+        count_query = f"SELECT COUNT(DISTINCT a.video_id) FROM artifacts a JOIN videos v ON v.video_id = a.video_id WHERE a.artifact_type = :artifact_type"
+        # Re-add filters for count
+        if label:
+            count_query += " AND a.payload->>'label' = :label"
+        if query:
+            count_query += " AND a.payload->>'text' ILIKE '%' || :query || '%'"
+        if filename:
+            count_query += " AND v.filename ILIKE '%' || :filename || '%'"
+        if min_confidence:
+            count_query += " AND (a.payload->>'confidence')::float >= :min_confidence"
+    else:
+        count_query = f"SELECT COUNT(*) FROM ({base_query}) sub"
     total = session.execute(text(count_query), params).scalar()
     
     # Add ordering and pagination
@@ -339,10 +385,11 @@ async def search_artifacts(
             artifact_id=row.artifact_id,
             artifact_type=row.artifact_type,
             start_ms=row.start_ms,
-            thumbnail_url=f"/api/v1/thumbnails/{row.video_id}/{row.start_ms}",
+            thumbnail_url=f"/v1/thumbnails/{row.video_id}/{row.start_ms}",
             preview=row.preview,
             video_filename=row.video_filename,
             file_created_at=row.file_created_at.isoformat() if row.file_created_at else None,
+            artifact_count=getattr(row, 'artifact_count', None),
         )
         for row in rows
     ]
@@ -482,7 +529,7 @@ sequenceDiagram
 **Validates: Requirements 2.1**
 
 **Property 3: Thumbnail URL Correctness**
-*For any* artifact search result, the `thumbnail_url` SHALL point to `/api/v1/thumbnails/{video_id}/{start_ms}` where `start_ms` matches the artifact's timestamp.
+*For any* artifact search result, the `thumbnail_url` SHALL point to `/v1/thumbnails/{video_id}/{start_ms}` where `start_ms` matches the artifact's timestamp.
 **Validates: Requirements 4.5**
 
 **Property 4: Search Result Ordering**

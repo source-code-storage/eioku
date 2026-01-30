@@ -441,6 +441,12 @@ export default function GlobalJumpControl({
             type="text"
             value={label}
             onChange={(e) => setLabel(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !loading) {
+                e.preventDefault();
+                jump('next');
+              }
+            }}
             placeholder={config.placeholder}
             style={{
               flex: 1,
@@ -463,6 +469,12 @@ export default function GlobalJumpControl({
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !loading) {
+                e.preventDefault();
+                jump('next');
+              }
+            }}
             placeholder={config.placeholder}
             style={{
               flex: 1,
@@ -485,6 +497,12 @@ export default function GlobalJumpControl({
             type="text"
             value={faceClusterId}
             onChange={(e) => setFaceClusterId(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !loading) {
+                e.preventDefault();
+                jump('next');
+              }
+            }}
             placeholder="Face cluster ID..."
             style={{
               flex: 1,

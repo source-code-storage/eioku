@@ -83,9 +83,13 @@ setup_logging()
 from fastapi import FastAPI  # noqa: E402
 
 from src.api.artifact_controller import router as artifact_router  # noqa: E402
+from src.api.artifact_search_controller import (  # noqa: E402
+    router as artifact_search_router,
+)
 from src.api.global_jump_controller import router as global_jump_router  # noqa: E402
 from src.api.path_controller_full import router as path_router  # noqa: E402
 from src.api.task_routes import router as task_router  # noqa: E402
+from src.api.thumbnail_controller import router as thumbnail_router  # noqa: E402
 from src.api.video_controller import router as video_router  # noqa: E402
 from src.database.connection import get_db  # noqa: E402
 from src.database.migrations import run_migrations  # noqa: E402
@@ -242,9 +246,11 @@ def create_app(config_path: str | None = None) -> FastAPI:
     # Include routers
     app.include_router(video_router, prefix="/v1")
     app.include_router(artifact_router, prefix="/v1")
+    app.include_router(artifact_search_router, prefix="/v1")
     app.include_router(path_router, prefix="/v1")
     app.include_router(task_router, prefix="/v1")
     app.include_router(global_jump_router, prefix="/v1")
+    app.include_router(thumbnail_router, prefix="/v1")
     logger.info("Routers included successfully")
 
     return app

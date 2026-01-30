@@ -2,6 +2,7 @@ import { useState } from 'react';
 import VideoGallery from './components/VideoGallery';
 import VideoPlayer from './components/VideoPlayer';
 import SearchPage, { SearchNavigationState } from './pages/SearchPage';
+import GalleryPage from './pages/GalleryPage';
 
 /**
  * State passed from search page to player page.
@@ -14,7 +15,7 @@ interface PlayerNavigationState {
 }
 
 function App() {
-  const [view, setView] = useState<'gallery' | 'player' | 'search'>('gallery');
+  const [view, setView] = useState<'gallery' | 'player' | 'search' | 'artifact-gallery'>('gallery');
   const [selectedVideoId, setSelectedVideoId] = useState('');
   const [playerNavState, setPlayerNavState] = useState<PlayerNavigationState | null>(null);
 
@@ -32,6 +33,30 @@ function App() {
 
   const handleGoToSearch = () => {
     setView('search');
+  };
+
+  const handleGoToArtifactGallery = () => {
+    setView('artifact-gallery');
+  };
+
+  /**
+   * Handle navigation from artifact gallery to player page.
+   * Navigates to player page with video loaded at correct timestamp.
+   */
+  const handleArtifactGalleryNavigateToVideo = (videoId: string, timestampMs: number) => {
+    setSelectedVideoId(videoId);
+    setPlayerNavState({
+      fromSearch: false,
+      formState: {
+        artifactType: 'object',
+        label: '',
+        query: '',
+        confidence: 0,
+        timestampMs: timestampMs,
+      },
+      initialTimestampMs: timestampMs,
+    });
+    setView('player');
   };
 
   /**
@@ -60,6 +85,16 @@ function App() {
         onNavigateToVideo={handleNavigateToVideo}
         onBack={handleBack}
         initialState={playerNavState?.formState}
+      />
+    );
+  }
+
+  // Render artifact gallery page
+  if (view === 'artifact-gallery') {
+    return (
+      <GalleryPage
+        onNavigateToVideo={handleArtifactGalleryNavigateToVideo}
+        onBack={handleBack}
       />
     );
   }
@@ -105,21 +140,38 @@ function App() {
           <h1 style={{ margin: '0 0 5px 0', fontSize: '28px' }}>Eioku</h1>
           <p style={{ margin: '0', color: '#666', fontSize: '14px' }}>Semantic Video Search Platform</p>
         </div>
-        <button
-          onClick={handleGoToSearch}
-          style={{
-            padding: '10px 20px',
-            backgroundColor: '#1976d2',
-            color: '#fff',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontSize: '14px',
-            fontWeight: '500',
-          }}
-        >
-          🔍 Jump Search
-        </button>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button
+            onClick={handleGoToArtifactGallery}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: '#7b1fa2',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: '500',
+            }}
+          >
+            🖼️ Artifact Gallery
+          </button>
+          <button
+            onClick={handleGoToSearch}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: '#1976d2',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: '500',
+            }}
+          >
+            🔍 Jump Search
+          </button>
+        </div>
       </div>
       <VideoGallery onSelectVideo={handleSelectVideo} />
     </div>
