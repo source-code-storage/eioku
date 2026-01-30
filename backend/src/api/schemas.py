@@ -37,10 +37,47 @@ class ErrorResponseSchema(BaseModel):
 
 
 class JumpToSchema(BaseModel):
-    """Schema for jump target timestamp."""
+    """Schema for jump target timestamp boundaries.
 
-    start_ms: int = Field(..., description="Start timestamp in milliseconds")
-    end_ms: int = Field(..., description="End timestamp in milliseconds")
+    Defines the temporal boundaries (start and end) for navigating to an
+    artifact within a video. The start_ms indicates where to seek, and
+    end_ms indicates the artifact's end boundary.
+
+    For result chaining in global jump navigation, use end_ms as the
+    from_ms parameter in subsequent requests to continue navigation.
+
+    Example:
+        ```json
+        {"start_ms": 15000, "end_ms": 15500}
+        ```
+
+    Attributes:
+        start_ms: Start timestamp in milliseconds - seek to this position.
+        end_ms: End timestamp in milliseconds - artifact ends here.
+    """
+
+    start_ms: int = Field(
+        ...,
+        description=(
+            "Start timestamp in milliseconds. This is the position to seek to "
+            "in the video player to view the artifact."
+        ),
+        examples=[0, 15000, 120000],
+        ge=0,
+    )
+    end_ms: int = Field(
+        ...,
+        description=(
+            "End timestamp in milliseconds. This marks the end of the artifact's "
+            "temporal boundary. Use this value as from_ms in subsequent global "
+            "jump requests to continue navigation from after this artifact."
+        ),
+        examples=[500, 15500, 125000],
+        ge=0,
+    )
+
+    class Config:
+        json_schema_extra = {"example": {"start_ms": 15000, "end_ms": 15500}}
 
 
 class JumpResponseSchema(BaseModel):
@@ -202,69 +239,203 @@ class GlobalJumpResultSchema(BaseModel):
 
     Represents a single artifact occurrence across the video library,
     including video metadata and temporal boundaries for navigation.
+
+    This schema is returned as part of the GlobalJumpResponseSchema and
+    contains all information needed to navigate to and display the artifact.
+
+    Example:
+        ```json
+        {
+            "video_id": "abc-123",
+            "video_filename": "beach_trip.mp4",
+            "file_created_at": "2025-05-19T02:22:21Z",
+            "jump_to": {"start_ms": 15000, "end_ms": 15500},
+            "artifact_id": "obj_xyz_001",
+            "preview": {"label": "dog", "confidence": 0.95}
+        }
+        ```
+
+    Attributes:
+        video_id: Unique identifier of the video containing the artifact.
+        video_filename: Human-readable filename for display in UI.
+        file_created_at: EXIF/filesystem creation date used for timeline ordering.
+        jump_to: Temporal boundaries for seeking to the artifact.
+        artifact_id: Unique identifier for this specific artifact occurrence.
+        preview: Kind-specific preview data for displaying result information.
     """
 
     video_id: str = Field(
         ...,
         description="Unique identifier of the video containing the artifact",
-        examples=["abc-123"],
+        examples=["abc-123", "video_001", "550e8400-e29b-41d4-a716-446655440000"],
     )
     video_filename: str = Field(
         ...,
-        description="Filename of the video for display purposes",
-        examples=["beach_trip.mp4"],
+        description="Filename of the video for display purposes in the UI",
+        examples=["beach_trip.mp4", "meeting_2025-01-15.mp4", "family_reunion.mov"],
     )
     file_created_at: datetime | None = Field(
         None,
         description=(
-            "EXIF/filesystem creation date of the video, used for global "
-            "timeline ordering. May be None if not available."
+            "EXIF/filesystem creation date of the video, used as the primary "
+            "sort key for global timeline ordering. May be None if the creation "
+            "date could not be determined from EXIF metadata or filesystem."
         ),
-        examples=["2025-05-19T02:22:21Z"],
+        examples=["2025-05-19T02:22:21Z", "2024-12-25T10:30:00Z"],
     )
     jump_to: JumpToSchema = Field(
         ...,
         description=(
-            "Temporal boundaries (start_ms, end_ms) for navigating to the artifact"
+            "Temporal boundaries (start_ms, end_ms) defining where to seek in "
+            "the video to view this artifact. Use start_ms for initial seek "
+            "position and end_ms as the starting point for subsequent searches."
         ),
     )
     artifact_id: str = Field(
         ...,
-        description="Unique identifier of the specific artifact occurrence",
-        examples=["artifact_xyz"],
+        description=(
+            "Unique identifier of the specific artifact occurrence. Can be used "
+            "to fetch additional details about the artifact if needed."
+        ),
+        examples=["obj_xyz_001", "face_abc_002", "trans_def_003"],
     )
     preview: dict = Field(
         ...,
         description=(
-            "Kind-specific preview data. For objects: {label, confidence}. "
-            "For faces: {cluster_id, confidence}. For transcript/OCR: {text}. "
-            "For scenes: {scene_index}."
+            "Kind-specific preview data for displaying result information. "
+            "Contents vary by artifact kind:\n"
+            '- **object**: `{"label": "dog", "confidence": 0.95}`\n'
+            '- **face**: `{"cluster_id": "person_001", "confidence": 0.89}`\n'
+            '- **transcript**: `{"text": "...matched text snippet..."}`\n'
+            '- **ocr**: `{"text": "...detected text..."}`\n'
+            '- **scene**: `{"scene_index": 5}`\n'
+            '- **place**: `{"label": "beach", "confidence": 0.87}`\n'
+            '- **location**: `{"latitude": 37.7749, "longitude": -122.4194}`'
         ),
-        examples=[{"label": "dog", "confidence": 0.95}],
+        examples=[
+            {"label": "dog", "confidence": 0.95},
+            {"cluster_id": "person_001", "confidence": 0.89},
+            {"text": "...discussed the project timeline..."},
+        ],
     )
 
     class Config:
         from_attributes = True
+        json_schema_extra = {
+            "example": {
+                "video_id": "abc-123",
+                "video_filename": "beach_trip.mp4",
+                "file_created_at": "2025-05-19T02:22:21Z",
+                "jump_to": {"start_ms": 15000, "end_ms": 15500},
+                "artifact_id": "obj_xyz_001",
+                "preview": {"label": "dog", "confidence": 0.95},
+            }
+        }
 
 
 class GlobalJumpResponseSchema(BaseModel):
     """Schema for the global jump navigation API response.
 
     Contains the list of matching results and pagination information.
-    Results are ordered by the global timeline (file_created_at, video_id, start_ms).
+    Results are ordered by the global timeline using a deterministic
+    three-level sort: file_created_at, video_id, start_ms.
+
+    **Pagination:**
+    The `has_more` field is crucial for implementing continuous navigation.
+    When `has_more` is True, additional results exist beyond the requested
+    limit. To fetch the next page:
+    1. Take the last result from the current response
+    2. Use its `video_id` as `from_video_id`
+    3. Use its `jump_to.end_ms` as `from_ms`
+    4. Make another request with the same filters
+
+    **Empty Results:**
+    When no matching artifacts are found, the response will have an empty
+    `results` array and `has_more` will be False. This is not an error
+    condition - it simply means no artifacts match the search criteria
+    from the specified position in the requested direction.
+
+    Example (with results):
+        ```json
+        {
+            "results": [
+                {
+                    "video_id": "abc-123",
+                    "video_filename": "beach_trip.mp4",
+                    "file_created_at": "2025-05-19T02:22:21Z",
+                    "jump_to": {"start_ms": 15000, "end_ms": 15500},
+                    "artifact_id": "obj_xyz_001",
+                    "preview": {"label": "dog", "confidence": 0.95}
+                }
+            ],
+            "has_more": true
+        }
+        ```
+
+    Example (no results):
+        ```json
+        {
+            "results": [],
+            "has_more": false
+        }
+        ```
+
+    Attributes:
+        results: List of matching artifacts ordered by global timeline.
+        has_more: Pagination flag indicating if more results exist.
     """
 
     results: list[GlobalJumpResultSchema] = Field(
         ...,
         description=(
-            "List of matching artifacts ordered by global timeline "
-            "(file_created_at, video_id, start_ms)"
+            "List of matching artifacts ordered by global timeline. "
+            "The ordering is deterministic using three sort keys:\n"
+            "1. **file_created_at** (primary): EXIF/filesystem creation date\n"
+            "2. **video_id** (secondary): For deterministic ordering when dates match\n"
+            "3. **start_ms** (tertiary): Artifact timestamp within the video\n\n"
+            "For 'next' direction, results are in ascending order. "
+            "For 'prev' direction, results are in descending order."
         ),
     )
     has_more: bool = Field(
         ...,
         description=(
-            "Indicates whether additional results exist beyond the requested "
-            "limit. True if more results are available, False otherwise."
+            "Pagination indicator. True if additional results exist beyond the "
+            "requested limit, False otherwise. Use this to implement continuous "
+            "navigation:\n\n"
+            "- **has_more=true**: More results available. Use the last result's "
+            "`video_id` and `jump_to.end_ms` as starting point for next request.\n"
+            "- **has_more=false**: No more results in this direction. User has "
+            "reached the end (for 'next') or beginning (for 'prev') of matching "
+            "artifacts in the global timeline."
         ),
     )
+
+    class Config:
+        json_schema_extra = {
+            "examples": [
+                {
+                    "summary": "Results found with more available",
+                    "value": {
+                        "results": [
+                            {
+                                "video_id": "abc-123",
+                                "video_filename": "beach_trip.mp4",
+                                "file_created_at": "2025-05-19T02:22:21Z",
+                                "jump_to": {"start_ms": 15000, "end_ms": 15500},
+                                "artifact_id": "obj_xyz_001",
+                                "preview": {"label": "dog", "confidence": 0.95},
+                            }
+                        ],
+                        "has_more": True,
+                    },
+                },
+                {
+                    "summary": "No results found",
+                    "value": {
+                        "results": [],
+                        "has_more": False,
+                    },
+                },
+            ]
+        }

@@ -318,7 +318,7 @@ The implementation follows a bottom-up approach: start with data models and serv
   - Test endpoint with curl or API client
   - _Requirements: 5.1_
 
-- [-] 26. Add comprehensive API documentation
+- [x] 26. Add comprehensive API documentation
   - Add docstrings to all endpoint handlers
   - Add response examples to OpenAPI schema
   - Document all query parameters with descriptions
@@ -326,7 +326,7 @@ The implementation follows a bottom-up approach: start with data models and serv
   - Verify documentation appears in /docs endpoint
   - _Requirements: 5.1, 5.3_
 
-- [ ] 27. Final checkpoint - Run all tests and quality checks
+- [x] 27. Final checkpoint - Run all tests and quality checks
   - Run all tests: `cd backend && poetry run pytest tests/ -v`
   - Run format check: `cd backend && poetry run ruff format --check src tests`
   - Run lint check: `cd backend && poetry run ruff check src tests`
