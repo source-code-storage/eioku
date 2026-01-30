@@ -251,4 +251,64 @@ describe('GlobalJumpControl', () => {
       expect(screen.getByText('50%')).toBeInTheDocument();
     });
   });
+
+  describe('Export Clip button', () => {
+    it('does not show export button when no videoId is provided (search page mode)', () => {
+      render(<GlobalJumpControl />);
+      
+      expect(screen.queryByRole('button', { name: /export clip/i })).not.toBeInTheDocument();
+    });
+
+    it('shows export button when videoId is provided (player mode)', () => {
+      render(<GlobalJumpControl videoId="test-video-123" />);
+      
+      // Export button should be visible when viewing a video
+      expect(screen.getByRole('button', { name: /export clip/i })).toBeInTheDocument();
+    });
+
+    it('shows timestamp inputs when videoId is provided', () => {
+      render(<GlobalJumpControl videoId="test-video-123" />);
+      
+      // Should show start and end time inputs
+      expect(screen.getByTitle('Start time (MM:SS)')).toBeInTheDocument();
+      expect(screen.getByTitle('End time (MM:SS)')).toBeInTheDocument();
+      
+      // Should show set-to-current-time buttons
+      expect(screen.getAllByTitle(/Set .* to current time/)).toHaveLength(2);
+    });
+
+    it('updates timestamps after successful navigation', async () => {
+      // Mock successful API response with a result
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          results: [{
+            video_id: 'test-video-123',
+            video_filename: 'test.mp4',
+            file_created_at: '2025-01-01T00:00:00Z',
+            jump_to: { start_ms: 65000, end_ms: 125000 },
+            artifact_id: 'artifact-1',
+            preview: {},
+          }],
+          has_more: true,
+        }),
+      });
+
+      render(<GlobalJumpControl videoId="test-video-123" />);
+      
+      // Click Next to trigger navigation
+      const nextButton = screen.getByRole('button', { name: /next/i });
+      fireEvent.click(nextButton);
+      
+      // Wait for the match display to update (indicates navigation completed)
+      await screen.findByText(/test\.mp4 @ 1:05/);
+      
+      // Check timestamps updated (1:05 and 2:05)
+      const startInput = screen.getByTitle('Start time (MM:SS)');
+      const endInput = screen.getByTitle('End time (MM:SS)');
+      
+      expect(startInput).toHaveValue('1:05');
+      expect(endInput).toHaveValue('2:05');
+    });
+  });
 });

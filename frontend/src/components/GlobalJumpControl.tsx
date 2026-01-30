@@ -181,6 +181,13 @@ export default function GlobalJumpControl({
   
   // Error state
   const [error, setError] = useState<string | null>(null);
+  
+  // Export clip loading state
+  const [exporting, setExporting] = useState<boolean>(false);
+  
+  // Clip export timestamp inputs (user-editable, in MM:SS format)
+  const [clipStartTime, setClipStartTime] = useState<string>('0:00');
+  const [clipEndTime, setClipEndTime] = useState<string>('0:00');
 
   // Get the configuration for the current artifact type
   const config = ARTIFACT_CONFIG[artifactType];
@@ -193,6 +200,27 @@ export default function GlobalJumpControl({
     const minutes = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${minutes}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  /**
+   * Parse MM:SS or M:SS format to milliseconds.
+   * Returns null if invalid format.
+   */
+  const parseTime = (timeStr: string): number | null => {
+    const match = timeStr.match(/^(\d+):(\d{1,2})$/);
+    if (!match) return null;
+    const minutes = parseInt(match[1], 10);
+    const seconds = parseInt(match[2], 10);
+    if (seconds >= 60) return null;
+    return (minutes * 60 + seconds) * 1000;
+  };
+
+  /**
+   * Update clip timestamps when a new result is received.
+   */
+  const updateClipTimestamps = (result: GlobalJumpResult) => {
+    setClipStartTime(formatTime(result.jump_to.start_ms));
+    setClipEndTime(formatTime(result.jump_to.end_ms));
   };
 
   /**
@@ -265,6 +293,7 @@ export default function GlobalJumpControl({
       const result = data.results[0];
       setLastResult(result);
       setCurrentMatch(`${result.video_filename} @ ${formatTime(result.jump_to.start_ms)}`);
+      updateClipTimestamps(result);
 
       // Handle navigation based on whether video changes
       if (result.video_id !== videoId) {
@@ -293,6 +322,79 @@ export default function GlobalJumpControl({
       setCurrentMatch(`Error: ${message}`);
     } finally {
       setLoading(false);
+    }
+  };
+
+  /**
+   * Export a video clip containing the current search result.
+   * Uses user-editable start/end timestamps in MM:SS format.
+   * Requirements: 11.1, 11.2, 11.3, 11.8
+   */
+  const exportClip = async () => {
+    // Parse user-entered timestamps
+    const startMs = parseTime(clipStartTime);
+    const endMs = parseTime(clipEndTime);
+    
+    if (startMs === null || endMs === null) {
+      setError('Invalid timestamp format. Use MM:SS (e.g., 1:30)');
+      return;
+    }
+    
+    if (endMs <= startMs) {
+      setError('End time must be after start time');
+      return;
+    }
+    
+    // Use the video ID from the last result if available, otherwise use current videoId
+    const targetVideoId = lastResult?.video_id || videoId;
+    
+    if (!targetVideoId) {
+      setError('No video selected');
+      return;
+    }
+    
+    setExporting(true);
+    setError(null);
+    
+    try {
+      const buffer_ms = 2000; // 2 second buffer
+      
+      const params = new URLSearchParams({
+        start_ms: startMs.toString(),
+        end_ms: endMs.toString(),
+        buffer_ms: buffer_ms.toString(),
+      });
+      
+      const response = await fetch(
+        `${apiUrl}/api/v1/videos/${targetVideoId}/clip?${params}`
+      );
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to export clip: ${errorText}`);
+      }
+      
+      // Get filename from Content-Disposition header
+      const disposition = response.headers.get('Content-Disposition');
+      const filenameMatch = disposition?.match(/filename="(.+)"/);
+      const filename = filenameMatch?.[1] || 'clip.mp4';
+      
+      // Download the blob
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Export failed';
+      setError(message);
+      console.error('Export failed:', err);
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -451,6 +553,101 @@ export default function GlobalJumpControl({
         >
           Next →
         </button>
+
+        {/* Export Clip section - shown when viewing any video */}
+        {videoId && (
+          <>
+            <button
+              onClick={() => {
+                if (videoRef?.current) {
+                  setClipStartTime(formatTime(Math.floor(videoRef.current.currentTime * 1000)));
+                }
+              }}
+              title="Set start to current time"
+              style={{
+                padding: '6px 8px',
+                backgroundColor: '#2a2a2a',
+                color: '#fff',
+                border: '1px solid #444',
+                borderRadius: '4px',
+                fontSize: '10px',
+                cursor: 'pointer',
+              }}
+            >
+              ⏱️
+            </button>
+            <input
+              type="text"
+              value={clipStartTime}
+              onChange={(e) => setClipStartTime(e.target.value)}
+              placeholder="0:00"
+              title="Start time (MM:SS)"
+              style={{
+                width: '50px',
+                padding: '6px 8px',
+                backgroundColor: '#2a2a2a',
+                color: '#fff',
+                border: '1px solid #444',
+                borderRadius: '4px',
+                fontSize: '12px',
+                textAlign: 'center',
+              }}
+            />
+            <span style={{ color: '#666', fontSize: '12px' }}>→</span>
+            <input
+              type="text"
+              value={clipEndTime}
+              onChange={(e) => setClipEndTime(e.target.value)}
+              placeholder="0:00"
+              title="End time (MM:SS)"
+              style={{
+                width: '50px',
+                padding: '6px 8px',
+                backgroundColor: '#2a2a2a',
+                color: '#fff',
+                border: '1px solid #444',
+                borderRadius: '4px',
+                fontSize: '12px',
+                textAlign: 'center',
+              }}
+            />
+            <button
+              onClick={() => {
+                if (videoRef?.current) {
+                  setClipEndTime(formatTime(Math.floor(videoRef.current.currentTime * 1000)));
+                }
+              }}
+              title="Set end to current time"
+              style={{
+                padding: '6px 8px',
+                backgroundColor: '#2a2a2a',
+                color: '#fff',
+                border: '1px solid #444',
+                borderRadius: '4px',
+                fontSize: '10px',
+                cursor: 'pointer',
+              }}
+            >
+              ⏱️
+            </button>
+            <button
+              onClick={exportClip}
+              disabled={exporting || loading}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: '#2a5a2a',
+                color: '#fff',
+                border: '1px solid #3a7a3a',
+                borderRadius: '4px',
+                fontSize: '12px',
+                cursor: exporting || loading ? 'not-allowed' : 'pointer',
+                opacity: exporting || loading ? 0.5 : 1,
+              }}
+            >
+              {exporting ? 'Exporting...' : '📥 Export Clip'}
+            </button>
+          </>
+        )}
 
         {/* Loading indicator */}
         {loading && (

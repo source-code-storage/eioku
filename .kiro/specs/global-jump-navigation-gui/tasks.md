@@ -131,7 +131,7 @@ Tasks for implementing the Global Jump Navigation GUI, including the frontend co
   - Generate descriptive filename
   - _Requirements: 11.5, 11.6, 11.7, 11.9_
 
-- [ ]* 19. Add export clip button to GlobalJumpControl
+- [x] 19. Add export clip button to GlobalJumpControl
   - Show button when lastResult is set
   - Implement download handler
   - Show loading state during export
