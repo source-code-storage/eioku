@@ -1,9 +1,8 @@
 [tool.poetry]
 name = "eioku-ml-service"
 version = "0.1.0"
-description = "Eioku ML Service - ML inference job consumer"
+description = "Eioku ML Service - ML inference job consumer (CPU)"
 authors = ["Eioku Team <team@eioku.com>"]
-readme = "README.md"
 packages = [{include = "src"}]
 
 [tool.poetry.dependencies]
@@ -11,47 +10,26 @@ python = "^3.10"
 fastapi = "^0.104.1"
 uvicorn = {extras = ["standard"], version = "^0.24.0"}
 pydantic = "^2.0"
-# ML inference dependencies (same as backend)
 ultralytics = "^8.0.0"
 faster-whisper = "^1.2.1"
 easyocr = "^1.7.0"
 opencv-python = "^4.8.0"
 numpy = "^1.24"
 pillow = "^10.0"
-torch = {version = "^2.1", markers = "platform_system != 'Darwin'", extras = ["cu121"]}
-torchvision = {version = "^0.16", markers = "platform_system != 'Darwin'"}
-# Job queue
+# PyTorch CPU-only (no CUDA)
+torch = "^2.1"
+torchvision = "^0.16"
 arq = "^0.26"
-# Database
 sqlalchemy = "^2.0"
 alembic = "^1.12.0"
 psycopg2-binary = "^2.9.9"
 python-json-logger = "^2.0.7"
-# Hashing
 xxhash = "^3.4.1"
-# Redis
 redis = "^5.0.0"
-# System monitoring
 psutil = "^5.9.0"
-nvidia-ml-py = "^12.535.108"
-# Metadata extraction
 pyexiftool = "^0.5.5"
 geopy = "^2.4.0"
-
-[tool.poetry.group.dev.dependencies]
-ruff = "^0.1.6"
-pytest = "^7.4.3"
-pytest-asyncio = "^0.21.1"
-httpx = "^0.25.2"
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
-
-[tool.ruff]
-line-length = 88
-target-version = "py310"
-
-[tool.ruff.lint]
-select = ["E", "W", "F", "I", "N", "UP"]
-ignore = []

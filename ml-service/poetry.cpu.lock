@@ -1,3 +1,130 @@
+Collecting poetry==1.7.1
+  Downloading poetry-1.7.1-py3-none-any.whl (235 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 236.0/236.0 kB 5.0 MB/s eta 0:00:00
+Collecting pyproject-hooks<2.0.0,>=1.0.0
+  Downloading pyproject_hooks-1.2.0-py3-none-any.whl (10 kB)
+Collecting platformdirs<4.0.0,>=3.0.0
+  Downloading platformdirs-3.11.0-py3-none-any.whl (17 kB)
+Collecting pexpect<5.0.0,>=4.7.0
+  Downloading pexpect-4.9.0-py2.py3-none-any.whl (63 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 63.8/63.8 kB 6.1 MB/s eta 0:00:00
+Collecting installer<0.8.0,>=0.7.0
+  Downloading installer-0.7.0-py3-none-any.whl (453 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 453.8/453.8 kB 12.6 MB/s eta 0:00:00
+Collecting poetry-core==1.8.1
+  Downloading poetry_core-1.8.1-py3-none-any.whl (306 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 306.6/306.6 kB 16.5 MB/s eta 0:00:00
+Collecting build<2.0.0,>=1.0.3
+  Downloading build-1.4.0-py3-none-any.whl (24 kB)
+Collecting virtualenv<21.0.0,>=20.23.0
+  Downloading virtualenv-20.36.1-py3-none-any.whl (6.0 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 6.0/6.0 MB 24.4 MB/s eta 0:00:00
+Collecting poetry-plugin-export<2.0.0,>=1.6.0
+  Downloading poetry_plugin_export-1.10.0-py3-none-any.whl (13 kB)
+Collecting tomli<3.0.0,>=2.0.1
+  Downloading tomli-2.4.0-py3-none-any.whl (14 kB)
+Collecting requests-toolbelt<2,>=0.9.1
+  Downloading requests_toolbelt-1.0.0-py2.py3-none-any.whl (54 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 54.5/54.5 kB 7.1 MB/s eta 0:00:00
+Collecting keyring<25.0.0,>=24.0.0
+  Downloading keyring-24.3.1-py3-none-any.whl (38 kB)
+Collecting fastjsonschema<3.0.0,>=2.18.0
+  Downloading fastjsonschema-2.21.2-py3-none-any.whl (24 kB)
+Collecting dulwich<0.22.0,>=0.21.2
+  Downloading dulwich-0.21.7-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (514 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 514.7/514.7 kB 14.6 MB/s eta 0:00:00
+Collecting requests<3.0,>=2.26
+  Downloading requests-2.32.5-py3-none-any.whl (64 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 64.7/64.7 kB 7.7 MB/s eta 0:00:00
+Collecting cachecontrol[filecache]<0.14.0,>=0.13.0
+  Downloading cachecontrol-0.13.1-py3-none-any.whl (22 kB)
+Collecting cleo<3.0.0,>=2.1.0
+  Downloading cleo-2.1.0-py3-none-any.whl (78 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 78.7/78.7 kB 10.6 MB/s eta 0:00:00
+Collecting shellingham<2.0,>=1.5
+  Downloading shellingham-1.5.4-py2.py3-none-any.whl (9.8 kB)
+Collecting pkginfo<2.0.0,>=1.9.4
+  Downloading pkginfo-1.12.1.2-py3-none-any.whl (32 kB)
+Collecting packaging>=20.5
+  Downloading packaging-26.0-py3-none-any.whl (74 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 74.4/74.4 kB 7.4 MB/s eta 0:00:00
+Collecting tomlkit<1.0.0,>=0.11.4
+  Downloading tomlkit-0.14.0-py3-none-any.whl (39 kB)
+Collecting trove-classifiers>=2022.5.19
+  Downloading trove_classifiers-2026.1.14.14-py3-none-any.whl (14 kB)
+Collecting crashtest<0.5.0,>=0.4.1
+  Downloading crashtest-0.4.1-py3-none-any.whl (7.6 kB)
+Collecting msgpack>=0.5.2
+  Downloading msgpack-1.1.2-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (406 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 406.1/406.1 kB 16.3 MB/s eta 0:00:00
+Collecting filelock>=3.8.0
+  Downloading filelock-3.20.3-py3-none-any.whl (16 kB)
+Collecting rapidfuzz<4.0.0,>=3.0.0
+  Downloading rapidfuzz-3.14.3-cp310-cp310-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (3.2 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.2/3.2 MB 23.9 MB/s eta 0:00:00
+Collecting urllib3>=1.25
+  Downloading urllib3-2.6.3-py3-none-any.whl (131 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 131.6/131.6 kB 18.2 MB/s eta 0:00:00
+Collecting jaraco.classes
+  Downloading jaraco.classes-3.4.0-py3-none-any.whl (6.8 kB)
+Collecting SecretStorage>=3.2
+  Downloading secretstorage-3.5.0-py3-none-any.whl (15 kB)
+Collecting jeepney>=0.4.2
+  Downloading jeepney-0.9.0-py3-none-any.whl (49 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 49.0/49.0 kB 7.8 MB/s eta 0:00:00
+Collecting importlib-metadata>=4.11.4
+  Downloading importlib_metadata-8.7.1-py3-none-any.whl (27 kB)
+Collecting ptyprocess>=0.5
+  Downloading ptyprocess-0.7.0-py2.py3-none-any.whl (13 kB)
+Collecting poetry-plugin-export<2.0.0,>=1.6.0
+  Downloading poetry_plugin_export-1.9.0-py3-none-any.whl (11 kB)
+  Downloading poetry_plugin_export-1.8.0-py3-none-any.whl (10 kB)
+  Downloading poetry_plugin_export-1.7.1-py3-none-any.whl (10 kB)
+  Downloading poetry_plugin_export-1.7.0-py3-none-any.whl (10 kB)
+  Downloading poetry_plugin_export-1.6.0-py3-none-any.whl (10 kB)
+Collecting idna<4,>=2.5
+  Downloading idna-3.11-py3-none-any.whl (71 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 71.0/71.0 kB 8.8 MB/s eta 0:00:00
+Collecting certifi>=2017.4.17
+  Downloading certifi-2026.1.4-py3-none-any.whl (152 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 152.9/152.9 kB 13.4 MB/s eta 0:00:00
+Collecting charset_normalizer<4,>=2
+  Downloading charset_normalizer-3.4.4-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (153 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 153.6/153.6 kB 10.8 MB/s eta 0:00:00
+Collecting distlib<1,>=0.3.7
+  Downloading distlib-0.4.0-py2.py3-none-any.whl (469 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 469.0/469.0 kB 27.4 MB/s eta 0:00:00
+Collecting typing-extensions>=4.13.2
+  Downloading typing_extensions-4.15.0-py3-none-any.whl (44 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 44.6/44.6 kB 6.2 MB/s eta 0:00:00
+Collecting zipp>=3.20
+  Downloading zipp-3.23.0-py3-none-any.whl (10 kB)
+Collecting cryptography>=2.0
+  Downloading cryptography-46.0.4-cp38-abi3-manylinux_2_34_x86_64.whl (4.5 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.5/4.5 MB 24.2 MB/s eta 0:00:00
+Collecting more-itertools
+  Downloading more_itertools-10.8.0-py3-none-any.whl (69 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 69.7/69.7 kB 7.6 MB/s eta 0:00:00
+Collecting cffi>=2.0.0
+  Downloading cffi-2.0.0-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (216 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 216.5/216.5 kB 14.8 MB/s eta 0:00:00
+Collecting pycparser
+  Downloading pycparser-3.0-py3-none-any.whl (48 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 48.2/48.2 kB 7.2 MB/s eta 0:00:00
+Installing collected packages: trove-classifiers, ptyprocess, fastjsonschema, distlib, zipp, urllib3, typing-extensions, tomlkit, tomli, shellingham, rapidfuzz, pyproject-hooks, pycparser, poetry-core, platformdirs, pkginfo, pexpect, packaging, msgpack, more-itertools, jeepney, installer, idna, filelock, crashtest, charset_normalizer, certifi, virtualenv, requests, jaraco.classes, importlib-metadata, dulwich, cleo, cffi, build, requests-toolbelt, cryptography, cachecontrol, SecretStorage, keyring, poetry-plugin-export, poetry
+Successfully installed SecretStorage-3.5.0 build-1.4.0 cachecontrol-0.13.1 certifi-2026.1.4 cffi-2.0.0 charset_normalizer-3.4.4 cleo-2.1.0 crashtest-0.4.1 cryptography-46.0.4 distlib-0.4.0 dulwich-0.21.7 fastjsonschema-2.21.2 filelock-3.20.3 idna-3.11 importlib-metadata-8.7.1 installer-0.7.0 jaraco.classes-3.4.0 jeepney-0.9.0 keyring-24.3.1 more-itertools-10.8.0 msgpack-1.1.2 packaging-26.0 pexpect-4.9.0 pkginfo-1.12.1.2 platformdirs-3.11.0 poetry-1.7.1 poetry-core-1.8.1 poetry-plugin-export-1.6.0 ptyprocess-0.7.0 pycparser-3.0 pyproject-hooks-1.2.0 rapidfuzz-3.14.3 requests-2.32.5 requests-toolbelt-1.0.0 shellingham-1.5.4 tomli-2.4.0 tomlkit-0.14.0 trove-classifiers-2026.1.14.14 typing-extensions-4.15.0 urllib3-2.6.3 virtualenv-20.36.1 zipp-3.23.0
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv
+
+[notice] A new release of pip is available: 23.0.1 -> 25.3
+[notice] To update, run: pip install --upgrade pip
+Creating virtualenv eioku-ml-service-9TtSrW0h-py3.10 in /root/.cache/pypoetry/virtualenvs
+The --no-wheel and --wheel options are deprecated. They have no effect for Python > 3.8 as wheel is no longer bundled in virtualenv.
+Updating dependencies
+Resolving dependencies...
+The lock file might not be compatible with the current version of Poetry.
+Upgrade Poetry to ensure the lock file is read properly or, alternatively, regenerate the lock file with the `poetry lock` command.
+
+Writing lock file
 # This file is automatically @generated by Poetry 1.7.1 and should not be changed by hand.
 
 [[package]]
