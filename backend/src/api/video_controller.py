@@ -1,4 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+import asyncio
+import logging
+import os
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from ..api.schemas import VideoCreateSchema, VideoResponseSchema, VideoUpdateSchema
@@ -6,6 +11,8 @@ from ..database.connection import get_db
 from ..domain.models import Video
 from ..repositories.video_repository import SqlVideoRepository
 from ..services.video_service import VideoService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/videos", tags=["videos"])
 
@@ -143,3 +150,113 @@ async def get_video_location(
             detail="No location data available for this video",
         )
     return location
+
+
+@router.get("/{video_id}/clip")
+async def download_clip(
+    video_id: str,
+    start_ms: int = Query(..., ge=0, description="Start timestamp in milliseconds"),
+    end_ms: int = Query(..., ge=0, description="End timestamp in milliseconds"),
+    buffer_ms: int = Query(
+        2000, ge=0, le=10000, description="Buffer time before/after in ms"
+    ),
+    service: VideoService = Depends(get_video_service),
+) -> StreamingResponse:
+    """
+    Export a video clip between the specified timestamps.
+
+    Uses ffmpeg with stream copy (-c copy) for fast extraction.
+
+    Args:
+        video_id: ID of the video to extract from
+        start_ms: Start timestamp in milliseconds
+        end_ms: End timestamp in milliseconds
+        buffer_ms: Additional buffer time before start and after end (default 2000ms)
+
+    Returns:
+        StreamingResponse with video/mp4 content type
+
+    Raises:
+        404: Video not found or video file not found on disk
+        400: Invalid timestamp range (end_ms <= start_ms)
+    """
+    # Validate video exists
+    video = service.get_video(video_id)
+    if not video:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Video not found"
+        )
+
+    # Validate video file exists on disk
+    if not os.path.exists(video.file_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Video file not found on disk"
+        )
+
+    # Validate timestamp range
+    if end_ms <= start_ms:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="end_ms must be greater than start_ms",
+        )
+
+    # Apply buffer (clamp to valid range)
+    actual_start_ms = max(0, start_ms - buffer_ms)
+    actual_end_ms = end_ms + buffer_ms
+
+    # Convert to seconds for ffmpeg
+    start_sec = actual_start_ms / 1000
+    duration_sec = (actual_end_ms - actual_start_ms) / 1000
+
+    # Generate filename
+    start_fmt = f"{int(start_sec // 60)}m{int(start_sec % 60)}s"
+    end_sec = actual_end_ms / 1000
+    end_fmt = f"{int(end_sec // 60)}m{int(end_sec % 60)}s"
+    base_name = os.path.splitext(video.filename)[0]
+    clip_filename = f"{base_name}_{start_fmt}-{end_fmt}.mp4"
+
+    # Build ffmpeg command
+    # -ss before -i for fast seeking
+    # -c copy for stream copy (fast, keyframe-aligned)
+    # -movflags frag_keyframe+empty_moov for streaming output
+    cmd = [
+        "ffmpeg",
+        "-ss",
+        str(start_sec),
+        "-i",
+        video.file_path,
+        "-t",
+        str(duration_sec),
+        "-c",
+        "copy",
+        "-movflags",
+        "frag_keyframe+empty_moov",
+        "-f",
+        "mp4",
+        "pipe:1",
+    ]
+
+    async def stream_output():
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+
+        while True:
+            chunk = await process.stdout.read(65536)  # 64KB chunks
+            if not chunk:
+                break
+            yield chunk
+
+        # Wait for process to complete
+        await process.wait()
+        if process.returncode != 0:
+            stderr = await process.stderr.read()
+            logger.error(f"FFmpeg failed: {stderr.decode()}")
+
+    return StreamingResponse(
+        stream_output(),
+        media_type="video/mp4",
+        headers={"Content-Disposition": f'attachment; filename="{clip_filename}"'},
+    )

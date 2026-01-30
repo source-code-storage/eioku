@@ -118,20 +118,20 @@ Tasks for implementing the Global Jump Navigation GUI, including the frontend co
 
 ### Backend: Video Clip Export (Nice to Have)
 
-- [ ]* 17. Create clip export endpoint
+- [x] 17. Create clip export endpoint
   - Add `GET /api/v1/videos/{video_id}/clip` endpoint
   - Accept start_ms, end_ms, buffer_ms parameters
   - Validate video exists and timestamp range
   - _Requirements: 11.4_
 
-- [ ]* 18. Implement ffmpeg clip extraction
+- [x] 18. Implement ffmpeg clip extraction
   - Build ffmpeg command with stream copy
   - Use fragmented MP4 for streaming output
   - Stream output directly to response
   - Generate descriptive filename
   - _Requirements: 11.5, 11.6, 11.7, 11.9_
 
-- [ ]* 19. Add export clip button to GlobalJumpControl
+- [x] 19. Add export clip button to GlobalJumpControl
   - Show button when lastResult is set
   - Implement download handler
   - Show loading state during export

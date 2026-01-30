@@ -28,6 +28,7 @@ interface RunInfo {
   created_at: string;
   artifact_count: number;
   model_profile: string | null;
+  language?: string | null;
 }
 
 interface Props {
