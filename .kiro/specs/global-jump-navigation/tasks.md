@@ -118,7 +118,7 @@ The implementation follows a bottom-up approach: start with data models and serv
   - Verify text matching
   - _Requirements: 4.1, 4.2, 4.3_
 
-- [ ] 9. Implement public jump_next() method in GlobalJumpService
+- [x] 9. Implement public jump_next() method in GlobalJumpService
   - Implement async jump_next() method that routes to appropriate search method based on kind
   - Handle kind="object" → _search_objects_global(direction="next")
   - Handle kind="face" → _search_faces_global(direction="next")
@@ -135,7 +135,7 @@ The implementation follows a bottom-up approach: start with data models and serv
   - Test invalid kind raises InvalidParameterError
   - _Requirements: 8.2_
 
-- [ ] 10. Implement public jump_prev() method in GlobalJumpService
+- [x] 10. Implement public jump_prev() method in GlobalJumpService
   - Implement async jump_prev() method that routes to appropriate search method based on kind
   - Handle all kind values with direction="prev"
   - Raise InvalidParameterError for unknown kind
@@ -146,14 +146,14 @@ The implementation follows a bottom-up approach: start with data models and serv
   - Test invalid kind raises InvalidParameterError
   - _Requirements: 8.2_
 
-- [ ] 11. Implement scene and place search methods
+- [x] 11. Implement scene and place search methods
   - Implement _search_scenes_global() method for both directions
   - Implement _search_places_global() method for both directions (using object_labels with place-specific labels)
   - Apply appropriate filters and ordering
   - Return GlobalJumpResult objects with scene/place-specific preview data
   - _Requirements: 5.1, 7.5_
 
-- [ ] 12. Implement location search method
+- [x] 12. Implement location search method
   - Implement _search_locations_global() method for both directions
   - Build query on video_locations projection table
   - Apply optional geo_bounds filtering if provided
@@ -161,7 +161,7 @@ The implementation follows a bottom-up approach: start with data models and serv
   - Return GlobalJumpResult objects with location preview data
   - _Requirements: 5.1_
 
-- [ ] 13. Create GlobalJumpController with parameter validation
+- [x] 13. Create GlobalJumpController with parameter validation
   - Create `backend/src/global_jump/router.py`
   - Implement global_jump() endpoint handler
   - Add parameter validation:
@@ -181,7 +181,7 @@ The implementation follows a bottom-up approach: start with data models and serv
   - **Property 11: Parameter Validation - Conflicting Filters**
   - **Validates: Requirements 8.2, 8.3, 8.4**
 
-- [ ] 14. Implement GET /jump/global endpoint
+- [x] 14. Implement GET /jump/global endpoint
   - Create APIRouter with prefix="/jump" and tags=["global-navigation"]
   - Implement @router.get("/global", response_model=GlobalJumpResponseSchema)
   - Call GlobalJumpService.jump_next() or jump_prev() based on direction parameter
@@ -200,7 +200,7 @@ The implementation follows a bottom-up approach: start with data models and serv
   - Test 400 for invalid parameters
   - _Requirements: 5.1, 5.2, 5.3, 8.1, 8.2, 8.3, 8.4_
 
-- [ ] 15. Implement error handling and response formatting
+- [x] 15. Implement error handling and response formatting
   - Ensure all error responses include detail, error_code, and timestamp
   - Implement proper HTTP status codes (200, 400, 404, 500)
   - Add error logging for debugging
@@ -215,7 +215,7 @@ The implementation follows a bottom-up approach: start with data models and serv
   - **Property 7: Limit Enforcement**
   - **Validates: Requirements 5.4, 5.5**
 
-- [ ] 16. Implement optional from_ms parameter handling
+- [x] 16. Implement optional from_ms parameter handling
   - Update GlobalJumpService methods to handle from_ms=None
   - For "next" direction: default from_ms to 0 (start of video)
   - For "prev" direction: default from_ms to video duration (end of video)

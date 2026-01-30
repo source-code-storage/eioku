@@ -3,6 +3,39 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 
+class ErrorResponseSchema(BaseModel):
+    """Schema for error responses with consistent format.
+
+    All error responses include detail, error_code, and timestamp
+    for debugging and client-side error handling.
+    """
+
+    detail: str = Field(
+        ...,
+        description="Human-readable error message describing what went wrong",
+        examples=["Video not found"],
+    )
+    error_code: str = Field(
+        ...,
+        description="Machine-readable error code for programmatic handling",
+        examples=["VIDEO_NOT_FOUND"],
+    )
+    timestamp: datetime = Field(
+        ...,
+        description="UTC timestamp when the error occurred",
+        examples=["2025-05-19T02:22:21Z"],
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "detail": "Video not found",
+                "error_code": "VIDEO_NOT_FOUND",
+                "timestamp": "2025-05-19T02:22:21Z",
+            }
+        }
+
+
 class JumpToSchema(BaseModel):
     """Schema for jump target timestamp."""
 
