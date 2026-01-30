@@ -457,8 +457,7 @@ class TestSearchQueryTotalCount:
         assert "payload_json->>'label' = :label" in count_query
         assert "v.filename ILIKE" in count_query
         assert (
-            "(a.payload_json->>'confidence')::float >= :min_confidence"
-            in count_query
+            "(a.payload_json->>'confidence')::float >= :min_confidence" in count_query
         )
         # Params should include all filter values
         assert params["label"] == "dog"

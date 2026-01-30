@@ -25,19 +25,19 @@ class TestGetThumbnailPath:
         """Test that path follows expected structure."""
         path = get_thumbnail_path("video-123", 5000)
 
-        assert path == THUMBNAIL_DIR / "video-123" / "5000.webp"
+        assert path == THUMBNAIL_DIR / "video-123" / "5000.jpg"
 
     def test_handles_zero_timestamp(self):
         """Test that zero timestamp is handled correctly."""
         path = get_thumbnail_path("video-abc", 0)
 
-        assert path == THUMBNAIL_DIR / "video-abc" / "0.webp"
+        assert path == THUMBNAIL_DIR / "video-abc" / "0.jpg"
 
     def test_handles_large_timestamp(self):
         """Test that large timestamps are handled correctly."""
         path = get_thumbnail_path("video-xyz", 3600000)  # 1 hour in ms
 
-        assert path == THUMBNAIL_DIR / "video-xyz" / "3600000.webp"
+        assert path == THUMBNAIL_DIR / "video-xyz" / "3600000.jpg"
 
 
 class TestEnsureThumbnailDirectory:
@@ -181,8 +181,8 @@ class TestFilterExistingThumbnails:
             # Create video directory and some existing thumbnails
             video_dir = temp_path / "video-123"
             video_dir.mkdir(parents=True)
-            (video_dir / "0.webp").touch()
-            (video_dir / "10000.webp").touch()
+            (video_dir / "0.jpg").touch()
+            (video_dir / "10000.jpg").touch()
 
             with patch(
                 "src.workers.thumbnail_extractor.THUMBNAIL_DIR",
@@ -206,9 +206,9 @@ class TestFilterExistingThumbnails:
             # Create video directory and all thumbnails
             video_dir = temp_path / "video-456"
             video_dir.mkdir(parents=True)
-            (video_dir / "1000.webp").touch()
-            (video_dir / "2000.webp").touch()
-            (video_dir / "3000.webp").touch()
+            (video_dir / "1000.jpg").touch()
+            (video_dir / "2000.jpg").touch()
+            (video_dir / "3000.jpg").touch()
 
             with patch(
                 "src.workers.thumbnail_extractor.THUMBNAIL_DIR",
@@ -243,8 +243,8 @@ class TestFilterExistingThumbnails:
             # Create video directory with some thumbnails
             video_dir = temp_path / "video-order"
             video_dir.mkdir(parents=True)
-            (video_dir / "2000.webp").touch()
-            (video_dir / "4000.webp").touch()
+            (video_dir / "2000.jpg").touch()
+            (video_dir / "4000.jpg").touch()
 
             with patch(
                 "src.workers.thumbnail_extractor.THUMBNAIL_DIR",
@@ -270,7 +270,7 @@ class TestFilterExistingThumbnails:
             # Create video directory with one existing thumbnail
             video_dir = temp_path / "video-log"
             video_dir.mkdir(parents=True)
-            (video_dir / "5000.webp").touch()
+            (video_dir / "5000.jpg").touch()
 
             with patch(
                 "src.workers.thumbnail_extractor.THUMBNAIL_DIR",
@@ -294,7 +294,7 @@ class TestFilterExistingThumbnails:
             # Create thumbnails for video-a only
             video_a_dir = temp_path / "video-a"
             video_a_dir.mkdir(parents=True)
-            (video_a_dir / "1000.webp").touch()
+            (video_a_dir / "1000.jpg").touch()
 
             with patch(
                 "src.workers.thumbnail_extractor.THUMBNAIL_DIR",
@@ -394,8 +394,8 @@ class TestGenerateThumbnailsIdempotent:
             # Create video directory and some existing thumbnails
             video_dir = temp_path / "video-123"
             video_dir.mkdir(parents=True)
-            (video_dir / "0.webp").touch()
-            (video_dir / "10000.webp").touch()
+            (video_dir / "0.jpg").touch()
+            (video_dir / "10000.jpg").touch()
 
             mock_extract = MagicMock(return_value=True)
 
@@ -428,9 +428,9 @@ class TestGenerateThumbnailsIdempotent:
             # Create video directory and all thumbnails
             video_dir = temp_path / "video-456"
             video_dir.mkdir(parents=True)
-            (video_dir / "1000.webp").touch()
-            (video_dir / "2000.webp").touch()
-            (video_dir / "3000.webp").touch()
+            (video_dir / "1000.jpg").touch()
+            (video_dir / "2000.jpg").touch()
+            (video_dir / "3000.jpg").touch()
 
             mock_extract = MagicMock(return_value=True)
 
@@ -593,7 +593,7 @@ class TestGenerateThumbnailsIdempotent:
                 mock_extract.assert_called_once_with(
                     "/path/to/video.mp4",
                     5000,
-                    temp_path / "video-args" / "5000.webp",
+                    temp_path / "video-args" / "5000.jpg",
                 )
 
     def test_logs_final_summary(self, caplog):
@@ -606,7 +606,7 @@ class TestGenerateThumbnailsIdempotent:
             # Create one existing thumbnail
             video_dir = temp_path / "video-log"
             video_dir.mkdir(parents=True)
-            (video_dir / "5000.webp").touch()
+            (video_dir / "5000.jpg").touch()
 
             mock_extract = MagicMock(return_value=True)
 
@@ -678,7 +678,7 @@ class TestExtractFrameWithFfmpeg:
     """Tests for extract_frame_with_ffmpeg function.
 
     Requirements:
-    - 1.4: Generates WebP format thumbnails with max width 320px
+    - 1.4: Generates JPEG format thumbnails with max width 320px
     - 1.6: Targets ~10-20KB file size via quality setting
     - 1.7: Uses ffmpeg for frame extraction
     """
@@ -698,7 +698,7 @@ class TestExtractFrameWithFfmpeg:
             extract_frame_with_ffmpeg(
                 "/path/to/video.mp4",
                 5000,
-                Path("/output/5000.webp"),
+                Path("/output/5000.jpg"),
             )
 
             mock_run.assert_called_once()
@@ -715,12 +715,10 @@ class TestExtractFrameWithFfmpeg:
             assert "1" in cmd
             assert "-vf" in cmd
             assert f"scale={THUMBNAIL_WIDTH}:-1" in cmd
-            assert "-c:v" in cmd
-            assert "libwebp" in cmd
-            assert "-quality" in cmd
+            assert "-q:v" in cmd
             assert str(THUMBNAIL_QUALITY) in cmd
             assert "-y" in cmd
-            assert "/output/5000.webp" in cmd
+            assert "/output/5000.jpg" in cmd
 
             # Check subprocess.run kwargs
             assert call_args[1]["capture_output"] is True
@@ -748,7 +746,7 @@ class TestExtractFrameWithFfmpeg:
                 extract_frame_with_ffmpeg(
                     "/video.mp4",
                     timestamp_ms,
-                    Path("/output.webp"),
+                    Path("/output.jpg"),
                 )
 
                 cmd = mock_run.call_args[0][0]
@@ -765,7 +763,7 @@ class TestExtractFrameWithFfmpeg:
             result = extract_frame_with_ffmpeg(
                 "/video.mp4",
                 1000,
-                Path("/output.webp"),
+                Path("/output.jpg"),
             )
 
             assert result is True
@@ -784,7 +782,7 @@ class TestExtractFrameWithFfmpeg:
             result = extract_frame_with_ffmpeg(
                 "/video.mp4",
                 1000,
-                Path("/output.webp"),
+                Path("/output.jpg"),
             )
 
             assert result is False
@@ -802,7 +800,7 @@ class TestExtractFrameWithFfmpeg:
             result = extract_frame_with_ffmpeg(
                 "/video.mp4",
                 1000,
-                Path("/output.webp"),
+                Path("/output.jpg"),
             )
 
             assert result is False
@@ -817,7 +815,7 @@ class TestExtractFrameWithFfmpeg:
             result = extract_frame_with_ffmpeg(
                 "/video.mp4",
                 1000,
-                Path("/output.webp"),
+                Path("/output.jpg"),
             )
 
             assert result is False
@@ -832,7 +830,7 @@ class TestExtractFrameWithFfmpeg:
             result = extract_frame_with_ffmpeg(
                 "/video.mp4",
                 1000,
-                Path("/output.webp"),
+                Path("/output.jpg"),
             )
 
             assert result is False
@@ -854,7 +852,7 @@ class TestExtractFrameWithFfmpeg:
                 extract_frame_with_ffmpeg(
                     "/video.mp4",
                     5000,
-                    Path("/output.webp"),
+                    Path("/output.jpg"),
                 )
 
                 assert "Failed to extract thumbnail at 5000ms" in caplog.text
@@ -876,7 +874,7 @@ class TestExtractFrameWithFfmpeg:
                 extract_frame_with_ffmpeg(
                     "/video.mp4",
                     5000,
-                    Path("/output.webp"),
+                    Path("/output.jpg"),
                 )
 
                 assert "timed out at 5000ms" in caplog.text
@@ -895,7 +893,7 @@ class TestExtractFrameWithFfmpeg:
                 extract_frame_with_ffmpeg(
                     "/video.mp4",
                     1000,
-                    Path("/output.webp"),
+                    Path("/output.jpg"),
                 )
 
                 assert "ffmpeg not found" in caplog.text
@@ -913,7 +911,7 @@ class TestExtractFrameWithFfmpeg:
             extract_frame_with_ffmpeg(
                 "/video.mp4",
                 1000,
-                Path("/output.webp"),
+                Path("/output.jpg"),
             )
 
             call_kwargs = mock_run.call_args[1]
@@ -934,7 +932,7 @@ class TestExtractFrameWithFfmpeg:
             result = extract_frame_with_ffmpeg(
                 "/video.mp4",
                 1000,
-                Path("/output.webp"),
+                Path("/output.jpg"),
             )
 
             assert result is False
@@ -953,7 +951,7 @@ class TestExtractFrameWithFfmpeg:
             result = extract_frame_with_ffmpeg(
                 "/video.mp4",
                 1000,
-                Path("/output.webp"),
+                Path("/output.jpg"),
             )
 
             # Should not raise, just return False

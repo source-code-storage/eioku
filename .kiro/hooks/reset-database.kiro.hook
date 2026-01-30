@@ -8,9 +8,8 @@
   },
   "then": {
     "type": "runCommand",
-    "command": "cd dev && ./stop && docker volume rm dev_postgres_data dev_valkey_data && ./start"
-  }
+    "command": "cd dev && ./stop && docker volume rm dev_postgres_data && ./starta"
+  },
+  "workspaceFolderName": "eioku-kiro-hackathon",
+  "shortName": "reset-database"
 }
-
-
-

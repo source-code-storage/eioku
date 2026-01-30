@@ -134,11 +134,11 @@ function App() {
 
   // Render gallery (default view)
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#fff' }}>
-      <div style={{ padding: '20px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <div style={{ minHeight: '100vh', backgroundColor: '#121212' }}>
+      <div style={{ padding: '20px', borderBottom: '1px solid #333', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h1 style={{ margin: '0 0 5px 0', fontSize: '28px' }}>Eioku</h1>
-          <p style={{ margin: '0', color: '#666', fontSize: '14px' }}>Semantic Video Search Platform</p>
+          <h1 style={{ margin: '0 0 5px 0', fontSize: '28px', color: '#fff' }}>Eioku</h1>
+          <p style={{ margin: '0', color: '#999', fontSize: '14px' }}>Video Intelligence Platform</p>
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>
           <button

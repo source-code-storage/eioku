@@ -1,10 +1,10 @@
 """Unit tests for thumbnail serving endpoint.
 
-Tests for the thumbnail controller API that serves WebP thumbnail images.
+Tests for the thumbnail controller API that serves JPEG thumbnail images.
 
 Requirements:
 - 3.1: GET /api/v1/thumbnails/{video_id}/{timestamp_ms} endpoint
-- 3.2: Return WebP file with appropriate content type when thumbnail exists
+- 3.2: Return JPEG file with appropriate content type when thumbnail exists
 - 3.3: Return 404 when thumbnail does not exist
 - 3.4: Set appropriate cache headers for browser caching (1 week)
 """
@@ -34,11 +34,11 @@ class TestGetThumbnailSuccess:
     """
 
     def test_get_thumbnail_success(self, client):
-        """Test that existing thumbnail returns 200 with WebP content.
+        """Test that existing thumbnail returns 200 with JPEG content.
 
         Requirements:
         - 3.1: GET /api/v1/thumbnails/{video_id}/{timestamp_ms} endpoint
-        - 3.2: Return WebP file with appropriate content type when thumbnail exists
+        - 3.2: Return JPEG file with appropriate content type when thumbnail exists
         """
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
@@ -48,20 +48,19 @@ class TestGetThumbnailSuccess:
             # Create thumbnail directory and file
             thumbnail_dir = temp_path / video_id
             thumbnail_dir.mkdir(parents=True, exist_ok=True)
-            thumbnail_file = thumbnail_dir / f"{timestamp_ms}.webp"
+            thumbnail_file = thumbnail_dir / f"{timestamp_ms}.jpg"
 
-            # Write a minimal WebP file (RIFF header for WebP)
-            # WebP files start with "RIFF" followed by file size and "WEBP"
-            webp_content = b"RIFF\x00\x00\x00\x00WEBP"
-            thumbnail_file.write_bytes(webp_content)
+            # Write a minimal JPEG file (JPEG files start with FFD8FF)
+            jpeg_content = b"\xff\xd8\xff\xe0\x00\x10JFIF"
+            thumbnail_file.write_bytes(jpeg_content)
 
             # Mock the THUMBNAIL_DIR to use our temp directory
             with patch("src.api.thumbnail_controller.THUMBNAIL_DIR", temp_path):
                 response = client.get(f"/v1/thumbnails/{video_id}/{timestamp_ms}")
 
                 assert response.status_code == 200
-                assert response.headers["content-type"] == "image/webp"
-                assert response.content == webp_content
+                assert response.headers["content-type"] == "image/jpeg"
+                assert response.content == jpeg_content
 
     def test_get_thumbnail_returns_correct_file_content(self, client):
         """Test that the correct thumbnail file content is returned."""
@@ -73,10 +72,10 @@ class TestGetThumbnailSuccess:
             # Create thumbnail directory and file
             thumbnail_dir = temp_path / video_id
             thumbnail_dir.mkdir(parents=True, exist_ok=True)
-            thumbnail_file = thumbnail_dir / f"{timestamp_ms}.webp"
+            thumbnail_file = thumbnail_dir / f"{timestamp_ms}.jpg"
 
             # Write specific content to verify correct file is returned
-            expected_content = b"RIFF\x10\x00\x00\x00WEBPtest-content"
+            expected_content = b"\xff\xd8\xff\xe0test-content"
             thumbnail_file.write_bytes(expected_content)
 
             with patch("src.api.thumbnail_controller.THUMBNAIL_DIR", temp_path):
@@ -145,8 +144,8 @@ class TestGetThumbnailCacheHeaders:
             # Create thumbnail directory and file
             thumbnail_dir = temp_path / video_id
             thumbnail_dir.mkdir(parents=True, exist_ok=True)
-            thumbnail_file = thumbnail_dir / f"{timestamp_ms}.webp"
-            thumbnail_file.write_bytes(b"RIFF\x00\x00\x00\x00WEBP")
+            thumbnail_file = thumbnail_dir / f"{timestamp_ms}.jpg"
+            thumbnail_file.write_bytes(b"\xff\xd8\xff\xe0\x00\x10JFIF")
 
             with patch("src.api.thumbnail_controller.THUMBNAIL_DIR", temp_path):
                 response = client.get(f"/v1/thumbnails/{video_id}/{timestamp_ms}")
@@ -172,8 +171,8 @@ class TestGetThumbnailCacheHeaders:
             # Create thumbnail directory and file
             thumbnail_dir = temp_path / video_id
             thumbnail_dir.mkdir(parents=True, exist_ok=True)
-            thumbnail_file = thumbnail_dir / f"{timestamp_ms}.webp"
-            thumbnail_file.write_bytes(b"RIFF\x00\x00\x00\x00WEBP")
+            thumbnail_file = thumbnail_dir / f"{timestamp_ms}.jpg"
+            thumbnail_file.write_bytes(b"\xff\xd8\xff\xe0\x00\x10JFIF")
 
             with patch("src.api.thumbnail_controller.THUMBNAIL_DIR", temp_path):
                 response = client.get(f"/v1/thumbnails/{video_id}/{timestamp_ms}")

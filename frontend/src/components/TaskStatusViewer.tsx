@@ -23,6 +23,7 @@ export default function TaskStatusViewer({ videoId, apiUrl = 'http://localhost:8
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [openMenuTaskId, setOpenMenuTaskId] = useState<string | null>(null);
   const [requeueing, setRequeueing] = useState<string | null>(null);
+  const [creatingTask, setCreatingTask] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const fetchTasks = async () => {
@@ -59,6 +60,31 @@ export default function TaskStatusViewer({ videoId, apiUrl = 'http://localhost:8
       setError(err instanceof Error ? err.message : 'Failed to requeue task');
     } finally {
       setRequeueing(null);
+    }
+  };
+
+  /**
+   * Create a new task for this video.
+   * Used for tasks like thumbnail generation that may not exist yet.
+   */
+  const handleCreateTask = async (taskType: string) => {
+    try {
+      setCreatingTask(taskType);
+      const response = await fetch(`${apiUrl}/api/v1/videos/${videoId}/tasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task_type: taskType }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.detail || 'Failed to create task');
+      }
+      setOpenMenuTaskId(null);
+      await fetchTasks();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create task');
+    } finally {
+      setCreatingTask(null);
     }
   };
 
@@ -148,7 +174,20 @@ export default function TaskStatusViewer({ videoId, apiUrl = 'http://localhost:8
     ocr: 'OCR',
     place_detection: 'Places',
     scene_detection: 'Scenes',
+    'thumbnail.extraction': 'Thumbnails',
   };
+
+  /**
+   * Check if a task can be rerun (completed or failed, not pending/running).
+   */
+  const canRerun = (status: string) => {
+    return status === 'completed' || status === 'failed';
+  };
+
+  /**
+   * Find the thumbnail task if it exists.
+   */
+  const thumbnailTask = tasks.find(t => t.task_type === 'thumbnail.extraction');
 
   if (loading) {
     return <div style={{ padding: '10px', fontSize: '12px', color: '#999' }}>Loading tasks...</div>;
@@ -230,7 +269,7 @@ export default function TaskStatusViewer({ videoId, apiUrl = 'http://localhost:8
               </span>
               {duration && <span style={{ color: '#999', marginLeft: '4px', fontSize: '10px' }}>({duration})</span>}
               
-              {task.status === 'failed' && (
+              {canRerun(task.status) && (
                 <div style={{ position: 'relative', marginLeft: '4px' }}>
                   <button
                     onClick={() => setOpenMenuTaskId(openMenuTaskId === task.task_id ? null : task.task_id)}
@@ -287,7 +326,7 @@ export default function TaskStatusViewer({ videoId, apiUrl = 'http://localhost:8
                           (e.target as HTMLButtonElement).style.backgroundColor = 'transparent';
                         }}
                       >
-                        {requeueing === task.task_id ? '⟳ Requeuing...' : '⟳ Requeue'}
+                        {requeueing === task.task_id ? '⟳ Rerunning...' : '⟳ Rerun'}
                       </button>
                     </div>
                   )}
@@ -296,6 +335,31 @@ export default function TaskStatusViewer({ videoId, apiUrl = 'http://localhost:8
             </div>
           );
         })}
+
+        {/* Generate Thumbnails button - show if no thumbnail task exists */}
+        {!thumbnailTask && (
+          <button
+            onClick={() => handleCreateTask('thumbnail.extraction')}
+            disabled={creatingTask === 'thumbnail.extraction'}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '4px 8px',
+              backgroundColor: '#2a2a2a',
+              borderRadius: '3px',
+              border: '1px solid #666',
+              fontSize: '11px',
+              color: '#fff',
+              cursor: creatingTask === 'thumbnail.extraction' ? 'not-allowed' : 'pointer',
+              opacity: creatingTask === 'thumbnail.extraction' ? 0.6 : 1,
+            }}
+            title="Generate thumbnails for artifact gallery"
+          >
+            <span style={{ color: '#666' }}>+</span>
+            <span>{creatingTask === 'thumbnail.extraction' ? 'Creating...' : 'Thumbnails'}</span>
+          </button>
+        )}
       </div>
     </div>
   );

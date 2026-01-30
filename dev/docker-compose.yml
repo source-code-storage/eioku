@@ -60,6 +60,7 @@ services:
       - ../config:/app/config:ro
       - ../test-videos:/media:ro
       - backend_models:/app/models
+      - thumbnails_data:/thumbnails
     environment:
       - PYTHONPATH=/app
       - DATABASE_URL=postgresql://eioku:eioku_dev@postgres:5432/eioku
@@ -97,6 +98,7 @@ services:
       - ../ml-service/categories_places365.txt:/app/ml-service/categories_places365.txt:ro
       - ../test-videos:/media:ro
       - ml_models:/models
+      - thumbnails_data:/data/thumbnails
     environment:
       - PYTHONPATH=/app
       - DATABASE_URL=postgresql://eioku:eioku_dev@postgres:5432/eioku
@@ -138,3 +140,4 @@ volumes:
   valkey_data:
   ml_models:
   backend_models:
+  thumbnails_data:

@@ -427,6 +427,7 @@ class VideoDiscoveryService:
                 "min_scene_length": 0.6,
             },
             "metadata_extraction": {},
+            "thumbnail.extraction": {},
         }
 
         # Get default config for task type

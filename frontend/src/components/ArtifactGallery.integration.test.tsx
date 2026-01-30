@@ -103,7 +103,7 @@ describe('ArtifactGallery Integration Tests', () => {
 
     // Mock window.location with default values
     delete (window as { location?: Location }).location;
-    window.location = {
+    (window as { location: Location }).location = {
       ...originalLocation,
       search: '',
       pathname: '/gallery',
@@ -112,7 +112,7 @@ describe('ArtifactGallery Integration Tests', () => {
 
   afterEach(() => {
     // Restore original location
-    window.location = originalLocation;
+    (window as { location: Location }).location = originalLocation;
   });
 
   describe('Search Flow End-to-End', () => {
@@ -598,7 +598,7 @@ describe('ArtifactGallery Integration Tests', () => {
     it('reads initial state from URL on mount', async () => {
       // Set up URL with search params
       delete (window as { location?: Location }).location;
-      window.location = {
+      (window as { location: Location }).location = {
         ...originalLocation,
         search: '?kind=transcript&query=hello&min_confidence=0.8',
         pathname: '/gallery',
@@ -767,7 +767,7 @@ describe('ArtifactGallery Integration Tests', () => {
     it('produces shareable URLs that restore search state', async () => {
       // Set up URL with complete search state
       delete (window as { location?: Location }).location;
-      window.location = {
+      (window as { location: Location }).location = {
         ...originalLocation,
         search: '?kind=object&label=dog&min_confidence=0.8&filename=vacation&group_by_video=true',
         pathname: '/gallery',

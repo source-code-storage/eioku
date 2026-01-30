@@ -1,14 +1,14 @@
-"""Thumbnail extractor module for generating WebP thumbnails at artifact timestamps.
+"""Thumbnail extractor module for generating JPEG thumbnails at artifact timestamps.
 
 This module provides functionality to extract thumbnail images from video frames
 at specific timestamps where artifacts were detected. Thumbnails are stored as
-WebP images for efficient storage and web delivery.
+JPEG images for broad compatibility and efficient storage.
 
 Requirements:
 - 1.1: Provides thumbnail.extraction task type
 - 1.2: Queries all artifacts for video and collects unique start_ms timestamps
-- 1.4: Generates WebP format thumbnails with max width 320px
-- 1.5: Stores thumbnails at /data/thumbnails/{video_id}/{timestamp_ms}.webp
+- 1.4: Generates JPEG format thumbnails with max width 320px
+- 1.5: Stores thumbnails at /data/thumbnails/{video_id}/{timestamp_ms}.jpg
 - 1.6: Targets ~10-20KB file size via quality setting
 - 1.7: Uses ffmpeg for frame extraction
 - 2.1: Deduplicates timestamps (multiple artifacts at same ms)
@@ -32,8 +32,9 @@ THUMBNAIL_DIR = Path("/data/thumbnails")
 # Image dimensions - max width with proportional height
 THUMBNAIL_WIDTH = 320
 
-# WebP quality setting (0-100) - targets ~10-20KB file size
-THUMBNAIL_QUALITY = 75
+# JPEG quality setting (2-31 for ffmpeg, lower = better quality)
+# Value of 5 targets ~10-20KB file size with good quality
+THUMBNAIL_QUALITY = 5
 
 # Timeout for ffmpeg frame extraction in seconds
 THUMBNAIL_TIMEOUT = 10
@@ -70,22 +71,22 @@ def get_thumbnail_path(video_id: str, timestamp_ms: int) -> Path:
     Returns:
         Path to the thumbnail file (may not exist yet)
     """
-    return THUMBNAIL_DIR / video_id / f"{timestamp_ms}.webp"
+    return THUMBNAIL_DIR / video_id / f"{timestamp_ms}.jpg"
 
 
 def extract_frame_with_ffmpeg(
     video_path: str, timestamp_ms: int, output_path: Path
 ) -> bool:
-    """Extract a single frame from a video using ffmpeg and save as WebP.
+    """Extract a single frame from a video using ffmpeg and save as JPEG.
 
     Uses ffmpeg to seek to the specified timestamp and extract a single frame,
     scaling it to the configured thumbnail width while maintaining aspect ratio.
-    The frame is encoded as WebP with the configured quality setting.
+    The frame is encoded as JPEG with the configured quality setting.
 
     Args:
         video_path: Path to the source video file
         timestamp_ms: Timestamp in milliseconds to extract the frame from
-        output_path: Path where the WebP thumbnail should be saved
+        output_path: Path where the JPEG thumbnail should be saved
 
     Returns:
         True if extraction was successful, False otherwise.
@@ -95,7 +96,7 @@ def extract_frame_with_ffmpeg(
         returning False to indicate failure.
 
     Requirements:
-        - 1.4: Generates WebP format thumbnails with max width 320px
+        - 1.4: Generates JPEG format thumbnails with max width 320px
         - 1.6: Targets ~10-20KB file size via quality setting
         - 1.7: Uses ffmpeg for frame extraction
 
@@ -103,7 +104,7 @@ def extract_frame_with_ffmpeg(
         >>> success = extract_frame_with_ffmpeg(
         ...     "/data/videos/video.mp4",
         ...     5000,
-        ...     Path("/data/thumbnails/video-123/5000.webp")
+        ...     Path("/data/thumbnails/video-123/5000.jpg")
         ... )
         >>> print(f"Extraction {'succeeded' if success else 'failed'}")
         Extraction succeeded
@@ -116,8 +117,7 @@ def extract_frame_with_ffmpeg(
     # -i: Input video file
     # -vframes 1: Extract only one frame
     # -vf scale: Scale to THUMBNAIL_WIDTH, -1 maintains aspect ratio
-    # -c:v libwebp: Use WebP codec
-    # -quality: WebP quality setting
+    # -q:v: JPEG quality (2-31, lower = better quality, 5 targets ~10-20KB)
     # -y: Overwrite output file if exists
     cmd = [
         "ffmpeg",
@@ -129,9 +129,7 @@ def extract_frame_with_ffmpeg(
         "1",
         "-vf",
         f"scale={THUMBNAIL_WIDTH}:-1",
-        "-c:v",
-        "libwebp",
-        "-quality",
+        "-q:v",
         str(THUMBNAIL_QUALITY),
         "-y",
         str(output_path),

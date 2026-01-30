@@ -9,6 +9,6 @@ test('renders Eioku title', () => {
 
 test('renders description', () => {
   render(<App />)
-  const descElement = screen.getByText(/semantic video search platform/i)
+  const descElement = screen.getByText(/video intelligence platform/i)
   expect(descElement).toBeInTheDocument()
 })

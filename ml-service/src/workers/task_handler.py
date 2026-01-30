@@ -98,6 +98,7 @@ async def process_ml_task(
             "scene_detection": "scenes",
             "metadata_extraction": "metadata",
             "thumbnail_extraction": "thumbnails",
+            "thumbnail.extraction": "thumbnails",
         }
         endpoint = task_to_endpoint.get(task_type)
         if not endpoint:
@@ -124,7 +125,7 @@ async def process_ml_task(
             await _update_video_file_created_at(
                 session, task.video_id, result, video_path
             )
-        elif task_type == "thumbnail_extraction":
+        elif task_type == "thumbnail_extraction" or task_type == "thumbnail.extraction":
             # Thumbnail extraction is different - it generates files, not artifacts
             from src.workers.thumbnail_extractor import (
                 collect_artifact_timestamps,
@@ -149,7 +150,30 @@ async def process_ml_task(
                 f"failed={stats.failed}"
             )
 
-            # Mark task as completed and return early (no artifacts to persist)
+            # Determine task status based on results
+            # Failed if: all thumbnails failed (none generated, none skipped)
+            # or if there were timestamps to process but all failed
+            all_failed = (
+                stats.failed > 0 and stats.generated == 0 and stats.total_timestamps > 0
+            )
+
+            if all_failed:
+                task.status = "failed"
+                task.error_message = f"All {stats.failed} thumbnail extractions failed"
+                task.completed_at = datetime.utcnow()
+                session.commit()
+                logger.warning(
+                    f"❌ Task {task_id} marked as FAILED: "
+                    f"all {stats.failed} thumbnails failed to generate"
+                )
+                return {
+                    "task_id": task_id,
+                    "status": "failed",
+                    "thumbnail_stats": stats.to_dict(),
+                    "error": f"All {stats.failed} thumbnail extractions failed",
+                }
+
+            # Mark task as completed (some or all succeeded)
             task.status = "completed"
             task.completed_at = datetime.utcnow()
             session.commit()
