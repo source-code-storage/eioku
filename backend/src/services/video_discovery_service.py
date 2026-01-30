@@ -26,6 +26,7 @@ ACTIVE_TASK_TYPES = [
     "place_detection",
     "scene_detection",
     "metadata_extraction",
+    "thumbnail.extraction",
 ]
 
 
@@ -427,6 +428,7 @@ class VideoDiscoveryService:
                 "min_scene_length": 0.6,
             },
             "metadata_extraction": {},
+            "thumbnail.extraction": {},
         }
 
         # Get default config for task type

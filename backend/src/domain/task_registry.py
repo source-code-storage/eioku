@@ -22,6 +22,7 @@ TASK_REGISTRY: dict[str, LanguageMode] = {
     "place_detection": LanguageMode.NONE,
     "scene_detection": LanguageMode.NONE,
     "metadata_extraction": LanguageMode.NONE,
+    "thumbnail_extraction": LanguageMode.NONE,  # Low priority, runs after ML tasks
 }
 
 

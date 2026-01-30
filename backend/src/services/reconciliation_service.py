@@ -107,7 +107,10 @@ class ReconciliationService:
         """
         logger.info("Syncing PENDING tasks")
 
+        from ..repositories.video_repository import SqlVideoRepository
+
         pending_tasks = self.task_repo.find_by_status("pending")
+        video_repo = SqlVideoRepository(self.session)
         checked = 0
         reenqueued = 0
 
@@ -124,12 +127,21 @@ class ReconciliationService:
                         f"re-enqueueing"
                     )
 
+                    # Get video to retrieve file_path
+                    video = video_repo.find_by_id(task.video_id)
+                    video_path = video.file_path if video else ""
+
+                    if not video_path:
+                        logger.warning(
+                            f"Could not find video path for task {task.task_id}"
+                        )
+
                     # Re-enqueue the job
                     await self.job_producer.enqueue_task(
                         task_id=task.task_id,
                         task_type=task.task_type,
                         video_id=task.video_id,
-                        video_path="",  # Path not available in task record
+                        video_path=video_path,
                         config={},
                     )
 
@@ -160,7 +172,10 @@ class ReconciliationService:
         """
         logger.info("Syncing RUNNING tasks")
 
+        from ..repositories.video_repository import SqlVideoRepository
+
         running_tasks = self.task_repo.find_by_status("running")
+        video_repo = SqlVideoRepository(self.session)
         checked = 0
         synced = 0
 
@@ -182,11 +197,15 @@ class ReconciliationService:
                     task.started_at = None
                     self.task_repo.update(task)
 
+                    # Get video to retrieve file_path
+                    video = video_repo.find_by_id(task.video_id)
+                    video_path = video.file_path if video else ""
+
                     await self.job_producer.enqueue_task(
                         task_id=task.task_id,
                         task_type=task.task_type,
                         video_id=task.video_id,
-                        video_path="",
+                        video_path=video_path,
                         config={},
                     )
 

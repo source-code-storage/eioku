@@ -8,37 +8,37 @@ Tasks for implementing artifact thumbnail generation and the artifact gallery se
 
 ### Backend: Thumbnail Extraction Task
 
-- [ ] 1. Create thumbnail extractor module
+- [x] 1. Create thumbnail extractor module
   - Create `ml-service/src/workers/thumbnail_extractor.py`
   - Define constants: THUMBNAIL_DIR, THUMBNAIL_WIDTH (320), THUMBNAIL_QUALITY (75)
   - Create output directory structure
   - _Requirements: 1.1, 1.4, 1.5, 1.6_
 
-- [ ] 2. Implement timestamp collection
+- [x] 2. Implement timestamp collection
   - Query all artifacts for video
   - Extract unique start_ms timestamps
   - Deduplicate timestamps (multiple artifacts at same ms)
   - _Requirements: 1.2, 2.1_
 
-- [ ] 3. Implement idempotent thumbnail generation
+- [x] 3. Implement idempotent thumbnail generation
   - Check if thumbnail file exists before extraction
   - Skip existing thumbnails
   - Log skipped vs generated counts
   - _Requirements: 1.3, 2.2, 2.3_
 
-- [ ] 4. Implement ffmpeg frame extraction
+- [x] 4. Implement ffmpeg frame extraction
   - Build ffmpeg command for WebP output
   - Use scale filter for 320px width
   - Handle extraction errors gracefully
   - Add timeout (10 seconds per frame)
   - _Requirements: 1.7_
 
-- [ ] 5. Register thumbnail task type
+- [x] 5. Register thumbnail task type
   - Add `thumbnail.extraction` to task registry
   - Configure as low priority task
   - _Requirements: 1.1_
 
-- [ ] 6. Write tests for thumbnail extraction
+- [x] 6. Write tests for thumbnail extraction
   - Test timestamp deduplication
   - Test idempotent behavior (skip existing)
   - Test ffmpeg command construction
@@ -47,24 +47,24 @@ Tasks for implementing artifact thumbnail generation and the artifact gallery se
 
 ### Backend: Thumbnail Serving API
 
-- [ ] 7. Create thumbnail controller
+- [x] 7. Create thumbnail controller
   - Create `backend/src/api/thumbnail_controller.py`
   - Add router with `/thumbnails` prefix
   - _Requirements: 3.1_
 
-- [ ] 8. Implement thumbnail serving endpoint
+- [x] 8. Implement thumbnail serving endpoint
   - Add `GET /{video_id}/{timestamp_ms}` endpoint
   - Return FileResponse with WebP content type
   - Return 404 if thumbnail not found
   - Set cache headers (1 week)
   - _Requirements: 3.1, 3.2, 3.3, 3.4_
 
-- [ ] 9. Register thumbnail router
+- [x] 9. Register thumbnail router
   - Import router in main_api.py
   - Include router with `/v1/thumbnails` prefix
   - _Requirements: 3.1_
 
-- [ ] 10. Write tests for thumbnail serving
+- [x] 10. Write tests for thumbnail serving
   - Test successful thumbnail retrieval
   - Test 404 for missing thumbnail
   - Test cache headers
@@ -72,44 +72,45 @@ Tasks for implementing artifact thumbnail generation and the artifact gallery se
 
 ### Backend: Artifact Search API
 
-- [ ] 11. Create artifact search controller
+- [x] 11. Create artifact search controller
   - Create `backend/src/api/artifact_search_controller.py`
   - Add router with `/artifacts` prefix
   - Define response schemas
   - _Requirements: 4.1_
 
-- [ ] 12. Implement search endpoint
+- [x] 12. Implement search endpoint
   - Add `GET /search` endpoint
-  - Accept kind, label, query, filename, min_confidence, limit, offset params
+  - Accept kind, label, query, filename, min_confidence, limit, offset, group_by_video params
   - Map kind to artifact_type
   - _Requirements: 4.1, 4.2_
 
-- [ ] 13. Implement search query building
+- [x] 13. Implement search query building
   - Build base query joining artifacts and videos
   - Add label filter for object/place
   - Add query filter for transcript/ocr
   - Add filename filter (ILIKE)
   - Add min_confidence filter
-  - _Requirements: 4.2, 4.8_
+  - Implement group_by_video with window function (first per video + count)
+  - _Requirements: 4.2, 4.8, 4.9, 4.10_
 
-- [ ] 14. Implement pagination and ordering
+- [x] 14. Implement pagination and ordering
   - Order by global timeline (file_created_at, video_id, start_ms)
   - Apply limit and offset
   - Return total count for pagination UI
   - _Requirements: 4.3, 4.6, 4.7_
 
-- [ ] 15. Build response with thumbnail URLs
+- [x] 15. Build response with thumbnail URLs
   - Construct thumbnail_url for each result
   - Include video_filename, file_created_at
   - Return ArtifactSearchResponse
   - _Requirements: 4.4, 4.5_
 
-- [ ] 16. Register artifact search router
+- [x] 16. Register artifact search router
   - Import router in main_api.py
   - Include router with `/v1/artifacts` prefix
   - _Requirements: 4.1_
 
-- [ ] 17. Write tests for artifact search
+- [x] 17. Write tests for artifact search
   - Test search by kind
   - Test label filter
   - Test query filter
@@ -117,60 +118,63 @@ Tasks for implementing artifact thumbnail generation and the artifact gallery se
   - Test min_confidence filter
   - Test pagination
   - Test ordering
+  - Test group_by_video mode
   - _Requirements: 4_
 
 ### Frontend: ArtifactGallery Component
 
-- [ ] 18. Create ArtifactGallery component skeleton
+- [x] 18. Create ArtifactGallery component skeleton
   - Create `frontend/src/components/ArtifactGallery.tsx`
   - Define props interface
   - Set up state for results, loading, pagination
   - _Requirements: 5.1_
 
-- [ ] 19. Implement search form
+- [x] 19. Implement search form
   - Add artifact type selector dropdown
   - Add label/query input based on type
   - Add filename filter input
   - Add confidence slider for applicable types
-  - _Requirements: 6.1, 6.2, 6.3, 6.4_
+  - Add "Group by video" toggle
+  - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.7_
 
-- [ ] 20. Implement API integration
+- [x] 20. Implement API integration
   - Build search request with form state
   - Call `/api/v1/artifacts/search` endpoint
   - Handle loading state
   - Handle errors
   - _Requirements: 6.5_
 
-- [ ] 21. Implement thumbnail grid
+- [x] 21. Implement thumbnail grid
   - Create responsive grid layout
   - Render ThumbnailCard for each result
   - Handle thumbnail load errors with placeholder
   - _Requirements: 5.2, 7.1, 7.2, 7.3_
 
-- [ ] 22. Create ThumbnailCard component
+- [x] 22. Create ThumbnailCard component
   - Display thumbnail image
   - Show label/text preview
   - Show video filename
   - Show timestamp (MM:SS format)
+  - Show artifact count badge when grouped
   - Handle click to navigate
-  - _Requirements: 5.3, 5.4_
+  - _Requirements: 5.3, 5.4, 6.8_
 
-- [ ] 23. Implement pagination/infinite scroll
+- [x] 23. Implement pagination/infinite scroll
   - Add pagination controls or infinite scroll
   - Load more results on scroll/click
   - _Requirements: 5.7_
 
-- [ ] 24. Implement empty and loading states
+- [x] 24. Implement empty and loading states
   - Show loading spinner during fetch
   - Show "No results found" for empty results
   - _Requirements: 5.5, 5.6_
 
-- [ ] 25. Implement URL state preservation
+- [x] 25. Implement URL state preservation
   - Sync form state to URL query params
   - Read initial state from URL on mount
   - _Requirements: 6.6_
 
-- [ ] 26. Apply component styling
+- [x] 26. Apply component styling
   - Use dark theme colors
   - Responsive grid (auto-fill, minmax 200px)
   - Card hover effects
@@ -178,20 +182,20 @@ Tasks for implementing artifact thumbnail generation and the artifact gallery se
 
 ### Frontend: Gallery Page
 
-- [ ] 27. Create Gallery page
+- [x] 27. Create Gallery page
   - Create `frontend/src/pages/GalleryPage.tsx`
   - Render ArtifactGallery component
   - Handle artifact click navigation to player
   - _Requirements: 5.4_
 
-- [ ] 28. Add gallery page route
+- [x] 28. Add gallery page route
   - Add `/gallery` route to app router
   - Link to gallery from navigation/header
   - _Requirements: 5.1_
 
 ### Testing
 
-- [ ] 29. Write ArtifactGallery unit tests
+- [x] 29. Write ArtifactGallery unit tests
   - Test search form rendering
   - Test grid layout
   - Test thumbnail card rendering
@@ -200,7 +204,7 @@ Tasks for implementing artifact thumbnail generation and the artifact gallery se
   - Test empty state
   - _Requirements: 5, 6, 7_
 
-- [ ] 30. Write integration tests
+- [x] 30. Write integration tests
   - Test search flow end-to-end
   - Test navigation to player
   - Test URL state preservation
@@ -208,32 +212,32 @@ Tasks for implementing artifact thumbnail generation and the artifact gallery se
 
 ### Checkpoints
 
-- [ ] 31. Checkpoint: Thumbnail extraction works
+- [x] 31. Checkpoint: Thumbnail extraction works
   - Run thumbnail task on test video
   - Verify thumbnails created in /data/thumbnails
   - Verify deduplication
   - Verify idempotency
   - _Requirements: 1, 2_
 
-- [ ] 32. Checkpoint: Thumbnail serving works
+- [x] 32. Checkpoint: Thumbnail serving works
   - Test endpoint returns thumbnails
   - Test 404 for missing
   - Test cache headers
   - _Requirements: 3_
 
-- [ ] 33. Checkpoint: Artifact search API works
+- [x] 33. Checkpoint: Artifact search API works
   - Test all filter combinations
   - Test pagination
   - Test thumbnail URLs in response
   - _Requirements: 4_
 
-- [ ] 34. Checkpoint: Gallery UI works
+- [x] 34. Checkpoint: Gallery UI works
   - Test search form
   - Test thumbnail grid display
   - Test navigation to player
   - _Requirements: 5, 6, 7_
 
-- [ ] 35. Final checkpoint: All tests pass
+- [x] 35. Final checkpoint: All tests pass
   - Run ml-service tests
   - Run backend tests
   - Run frontend tests

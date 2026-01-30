@@ -25,6 +25,7 @@ class JobProducer:
         "place_detection",
         "scene_detection",
         "metadata_extraction",
+        "thumbnail.extraction",
     }
 
     def __init__(self, redis_url: str | None = None):
