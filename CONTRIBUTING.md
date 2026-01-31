@@ -26,47 +26,8 @@ Stop with:
 ### URLs
 - **Application**: http://localhost:8080
 - **Backend API**: http://localhost:8080/api/
+- **Backend API docs**: http://localhost:8080/api/docs
 - **Health Check**: http://localhost:8080/health
-
-### Manual Setup
-
-#### Prerequisites
-
-- Python 3.10+
-- Node.js 18+
-- Git
-
-#### 1. Install Poetry
-
-```bash
-curl -sSL https://install.python-poetry.org | python3 -
-```
-
-Add Poetry to your PATH:
-```bash
-export PATH="$HOME/.local/bin:$PATH"
-```
-
-Verify installation:
-```bash
-poetry --version
-```
-
-#### 2. Backend Setup
-
-```bash
-cd backend
-poetry install
-poetry run uvicorn src.main:app --reload
-```
-
-#### 3. Frontend Setup
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
 
 ## Development Workflow
 

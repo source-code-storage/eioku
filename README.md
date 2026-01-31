@@ -1,218 +1,266 @@
-# Eioku - Semantic Video Search Platform
+- [Eioku - Video Intelligence Platform](#eioku---video-intelligence-platform)
+  - [What It Does](#what-it-does)
+  - [Demo Checklist](#demo-checklist)
+    - [Limitations](#limitations)
+  - [Quick Start with Docker](#quick-start-with-docker)
+    - [GPU (CUDA) - Recommended for NVIDIA GPUs](#gpu-cuda---recommended-for-nvidia-gpus)
+    - [CPU - For Apple Silicon or systems without NVIDIA GPU](#cpu---for-apple-silicon-or-systems-without-nvidia-gpu)
+    - [Stopping and Cleaning Up](#stopping-and-cleaning-up)
+    - [Performance Comparison](#performance-comparison)
+  - [Architecture](#architecture)
+  - [OpenAPI Documentation](#openapi-documentation)
+  - [Kiro Usage](#kiro-usage)
+    - [Development Workflow](#development-workflow)
+    - [Specs (7 features)](#specs-7-features)
+    - [Steering (3 rules)](#steering-3-rules)
+    - [Hooks (11 automations)](#hooks-11-automations)
+    - [Agent Prompt](#agent-prompt)
+  - [Related Documentation](#related-documentation)
+  - [Contributing](#contributing)
 
-A powerful semantic video search platform designed for video editors with large content libraries. Eioku enables natural language search across video content with advanced navigation features including transcript-based navigation, scene jumping, and object/face detection.
+# Eioku - Video Intelligence Platform
 
-## Overview
+Eioku transforms your video library into a searchable database. You film it, we index it, you find it.
 
-Eioku processes videos from configured file paths, extracts audio for transcription, performs computer vision analysis (scene detection, object detection, face detection), and enables semantic search through natural language queries. The platform provides an interactive player view with multiple navigation methods to help editors quickly find and navigate to specific content.
+---
 
-**Example Query**: "Show me clips where I talk about Kiro"
-**Result**: Gallery of video segments with timestamps where the term appears
+## What It Does
 
-## Key Features
+- **Automatic ML Analysis**: Drop videos in a folder, Eioku automatically runs:
+  - Object detection (YOLO) - find every dog, car, person
+  - Speech transcription (Whisper) - searchable transcripts
+  - OCR (EasyOCR) - text visible in frames
+  - Place recognition (Places365) - indoor/outdoor scene classification
+  - Scene detection - shot boundary detection
+  - Metadata extraction - EXIF timestamps, GPS, duration
 
-### 🔍 Semantic Search
-- Natural language queries across video transcriptions
-- Synonym and concept understanding
-- Relevance-ranked results with timestamps
-- Topic-based search suggestions
+- **Cross-Video Search**: Search across your entire library chronologically
+  - "Find every dog scene" - jumps between videos automatically
+  - Ordered by when you actually filmed (EXIF date), not upload date
 
-### 🎬 Advanced Video Navigation
-- **Transcript Navigation**: Click any transcript text to jump to that moment
-- **Scene Navigation**: Next/previous scene controls with automatic boundary detection
-- **Object Navigation**: Jump between occurrences of detected objects
-- **Face Navigation**: Navigate between appearances of detected faces
-- **Timeline Markers**: Visual timeline with scene, object, and face markers
+- **Global Jump Navigation**: Cmd+F for your video archive
+  - Next/Previous buttons navigate across all videos
+  - Full-text search on transcripts and OCR text
 
-### 🚀 Parallel Processing
-- Independent task processing for maximum efficiency
-- GPU acceleration for object/face detection
-- CPU parallelization for transcription and scene detection
-- Configurable processing profiles (Balanced, Search First, Visual First, Low Resource)
+---
 
-### 📊 Topic Discovery
-- Automatic topic extraction from video content
-- Aggregated topics across entire library
-- Clickable topic suggestions for quick search
+## Demo Checklist
 
-### 💾 Zero-Ops Architecture
-- No external servers or databases required
-- File-based storage (SQLite + FAISS)
-- Single-host deployment
-- Desktop application (Electron)
+> Hackathon judges: Use the Google Drive videos from the submission, or bring your own!
 
-## Technology Stack
+1. Add videos to `test-videos/` directory (variety: dogs, people, speech, text, GPS)
+2. Start the environment using the [Quick Start](#quick-start-with-docker) instructions below
+3. Open http://localhost:9080
+4. Wait for ML tasks to complete (check status in video player view)
+5. Try features:
+   - **Video Player**: Explore detected objects, transcripts, OCR, places
+   - **Clip Export**: Set timestamps and download a clip
+   - **Global Jump**: Search + use Previous/Next to jump across videos
+   - **Artifact Gallery**: See all matches with thumbnails
 
-### Backend
-- **Language**: Python 3.10+
-- **Framework**: FastAPI
-- **Database**: SQLite
-- **Vector Store**: FAISS
-- **Task Queue**: Python multiprocessing
+### Limitations
 
-### Machine Learning
-- **Transcription**: OpenAI Whisper (Large V3 or Turbo)
-- **Embeddings**: sentence-transformers (all-MiniLM-L6-v2)
-- **Scene Detection**: PySceneDetect
-- **Object Detection**: Ultralytics YOLOv8
-- **Face Detection**: YOLOv8 Face Model
+1. **Video discovery**: Videos are only discovered when the backend starts - no hot-reload for new files
+2. **Face search**: Face detection runs but face search/clustering is not implemented yet
+3. **No combined filters**: Global jump searches one artifact type at a time (can't search "dog AND tokyo")
+4. **Single language OCR**: OCR is configured for English only
+5. **No semantic search**: Text search is exact match only - no embeddings or similarity search yet
+6. **Transcription language**: Whisper auto-detects language but works best with English
+7. **GPS reverse geocoding**: Requires internet connection for location names
+8. **Large video files**: Very long videos (>1hr) may timeout during processing
+9. **No search suggestions**: No aggregation of available labels/terms - users must guess what to search for -- you
+can view individual videos to get an idea for what does
+exist, but it's far from ideal (e.g., no "show me all detected objects or spoken words")
 
-### Frontend
-- **Framework**: Electron + React + TypeScript
-- **UI Library**: Material-UI or Tailwind CSS
-- **Video Player**: HTML5 Video with custom controls
+---
 
-## Project Structure
+## Quick Start with Docker
+
+Two deployment options are available depending on your hardware:
+
+### GPU (CUDA) - Recommended for NVIDIA GPUs
+
+For systems with NVIDIA GPUs and the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) installed:
+
+```bash
+# Start with GPU acceleration (~10x faster ML processing)
+docker compose -f docker/docker-compose.cuda.yml up
+
+# Access the app
+open http://localhost:9080
+```
+
+### CPU - For Apple Silicon or systems without NVIDIA GPU
+
+For Mac (Apple Silicon), Windows without NVIDIA GPU, or Linux without CUDA:
+
+```bash
+# Start with CPU-only processing (slower but universal)
+docker compose -f docker/docker-compose.cpu.yml up
+
+# Access the app
+open http://localhost:9080
+```
+
+> **Note for Apple Silicon users**: Use the CPU environment. The CUDA environment requires NVIDIA GPUs which are not available on Apple hardware. MPS is not supported in docker containers, and I did not have time to create a non-docker environment for the demo.
+
+### Stopping and Cleaning Up
+
+```bash
+# Stop the environment
+docker compose -f docker/docker-compose.cuda.yml down
+docker compose -f docker/docker-compose.cpu.yml down
+
+# Stop and remove all data (fresh start)
+docker compose -f docker/docker-compose.cuda.yml down -v
+docker compose -f docker/docker-compose.cpu.yml down -v
+```
+
+### Performance Comparison
+
+Benchmark on 13 test videos (557 MB total, 2.5-275 MB each):
+
+| Environment | Hardware | Tasks | Duration | Rate |
+|-------------|----------|-------|----------|------|
+| Docker CUDA | RTX 3070 Ti (8GB) | 130 | 9 min 9 sec | ~14.2 tasks/min |
+| Docker CPU | Ryzen 9 5900X | 80 | 1 hr 7 min | ~1.2 tasks/min |
+
+GPU is roughly **10-12x faster** than CPU for ML processing.
+
+---
+
+## Architecture
 
 ```
-.
-├── .kiro/
-│   └── specs/
-│       └── semantic-video-search/
-│           ├── requirements.md    # EARS-compliant requirements
-│           ├── design.md          # Architecture and design
-│           └── tasks.md           # Implementation tasks
-├── DEVLOG.md                      # Development log
-└── README.md                      # This file
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   Frontend  │────▶│  API Service│────▶│  PostgreSQL │
+│   (React)   │     │  (FastAPI)  │     │   (JSONB)   │
+└─────────────┘     └──────┬──────┘     └──────▲──────┘
+                           │                   │
+                    ┌──────▼──────┐            │
+                    │    Redis    │            │
+                    │   (Valkey)  │            │
+                    └──────┬──────┘            │
+                           │                   │
+                    ┌──────▼──────┐            │
+                    │ ML Service  │────────────┘
+                    │ (GPU/arq)   │  writes artifacts
+                    └─────────────┘
 ```
 
-## Getting Started
+See [changes.md](./docs/changes.md) for full C4 diagrams and architecture evolution.
 
-### Prerequisites
+---
 
-**Minimum Requirements:**
-- CPU: 4 cores
-- RAM: 8 GB
-- Storage: 10 GB + video library size
-- Python 3.10+
-- Node.js 18+ (for Electron frontend)
+## OpenAPI Documentation
 
-**Recommended:**
-- CPU: 8+ cores
-- RAM: 16 GB
-- GPU: NVIDIA GPU with 4+ GB VRAM (CUDA support)
-- Storage: SSD with 50 GB + video library size
+When running locally:
 
-### Installation
+> Note: this is when using the compose files under the [docker](./docker/) folder.
+> For developing, see: [Contributing](#contributing).
 
-*Coming soon - implementation in progress*
+- **Swagger UI**: http://localhost:9080/api/docs
+- **ReDoc**: http://localhost:9080/api/redoc
+- **OpenAPI JSON**: http://localhost:9080/api/openapi.json
 
-## Specification Documents
+## Kiro Usage
 
-This project follows a spec-driven development approach with comprehensive documentation:
+This project extensively uses Kiro's spec-driven development workflow and automation features.
 
-### 📋 Requirements Document
-- 10 major requirements with 60+ acceptance criteria
-- EARS-compliant format (Easy Approach to Requirements Syntax)
-- INCOSE quality rules applied
-- Complete glossary of terms
+### Development Workflow
 
-**Location**: `.kiro/specs/semantic-video-search/requirements.md`
+```mermaid
+flowchart TD
+    subgraph Spec["Spec-Driven Design (Kiro)"]
+        REQ[Define Requirements] --> DES[Create Design]
+        DES --> TASKS[Generate Tasks]
+    end
+    
+    subgraph Dev["Development Loop (per task)"]
+        CODE[Write Code] --> REVIEW[Review with Agent Prompt]
+        REVIEW --> APPLY[Apply Suggestions]
+        APPLY --> LINT[Lint]
+        LINT --> TEST[Test]
+        TEST --> BUILD[Build]
+    end
+    
+    subgraph PR["Pull Request"]
+        COMMIT[Commit] --> CREATE[Create PR]
+        CREATE --> DESC[Describe PR]
+        DESC --> MERGE[Merge to Main]
+    end
+    
+    TASKS --> CODE
+    BUILD --> COMMIT
+    MERGE --> REQ
+    
+    %% Kiro Hooks
+    H1([🪝 principal-code-review]):::hook -.-> REVIEW
+    H2([🪝 lint-backend-code]):::hook -.-> LINT
+    H3([🪝 lint-ml-service]):::hook -.-> LINT
+    H4([🪝 lint-frontend]):::hook -.-> LINT
+    H5([🪝 run-backend-tests]):::hook -.-> TEST
+    H6([🪝 run-ml-service-tests]):::hook -.-> TEST
+    H7([🪝 pre-commit-checks]):::hook -.-> COMMIT
+    
+    classDef hook fill:#2563eb,stroke:#1d4ed8,stroke-width:1px,color:#fff
+```
 
-### 🏗️ Design Document
-- Parallel processing architecture with task orchestration
-- Complete technology stack definition
-- 4 processing profiles with worker configurations
-- 7 comprehensive user flow diagrams
-- 29 correctness properties with requirements traceability
-- Component interfaces and data models
-- Error handling and testing strategy
+### Specs (7 features)
 
-**Location**: `.kiro/specs/semantic-video-search/design.md`
+> Note: the architecture for this project evolved a lot as I made progress. Review
+> those changes here: [Architecture Evolution](./changes.md).
 
-### ✅ Implementation Tasks
-- 25 major tasks with 100+ sub-tasks
-- Granular breakdown of database schema and DAOs
-- Property-based tests for correctness validation
-- GitHub Actions and Docker integration
-- Requirements traceability for every task
+Each feature was designed using Kiro's requirements → design → tasks workflow.
+I made extensive use of the [principal-software-engineer.agent](.kiro/prompts/principal-software-engineer.agent.md) for software architecture decisions
+and code reviews.
 
-**Location**: `.kiro/specs/semantic-video-search/tasks.md`
+| Spec | Description |
+|------|-------------|
+| `artifact-envelope-architecture` | Unified artifact storage model with schema registry, projections, and selection policies |
+| `global-jump-navigation` | Cross-video search and navigation API using global timeline ordering |
+| `global-jump-navigation-gui` | Frontend UI for global jump with search controls |
+| `artifact-thumbnails-gallery` | Thumbnail extraction task and gallery search API/UI |
+| `worker-ml-service-separation` | Split monolith into API, Worker, and ML services with Redis job queue |
+| `video-metadata-extraction` | EXIF metadata extraction and GPS location handling |
+| `semantic-video-search` | Core video search and artifact query functionality |
 
-## Development Approach
+### Steering (3 rules)
 
-### Spec-Driven Development
-1. **Requirements First**: Define what the system should do
-2. **Design Second**: Define how the system will work
-3. **Tasks Third**: Break down implementation into actionable steps
-4. **Implementation**: Execute tasks with continuous validation
+Always-on guidance for consistent development:
 
-### Property-Based Testing
-- Formal correctness properties derived from requirements
-- Universal properties tested across all inputs (not just examples)
-- Minimum 100 iterations per property test
-- Hypothesis (Python) for property-based testing
+- `development-principles.md` - Incremental commits, approval workflow, conventional commits, quality gates
+- `fastapi-dev-environment.md` - FastAPI best practices, async-first, Pydantic everywhere, container-first dev
+- `trunk-based-development.md` - Short-lived branches, small PRs, CI/CD integration
 
-### Incremental Development
-- Bottom-up approach: data layer → processing → API → UI
-- Strategic checkpoints for validation
-- Optional tasks marked for faster MVP
+### Hooks (11 automations)
 
-## Processing Profiles
+User-triggered commands for common workflows:
 
-### Balanced (Default)
-Even resource distribution, optimized for general use
-- Transcription: 2 workers (high priority)
-- Scene Detection: 2 workers (medium priority)
-- Object Detection: 2 workers (medium priority, GPU)
-- Face Detection: 2 workers (medium priority, GPU)
+| Hook | Action |
+|------|--------|
+| `start-dev-env` | Start Docker dev environment |
+| `stop-dev-env` | Stop Docker dev environment |
+| `reset-database` | Reset PostgreSQL and restart services |
+| `lint-backend-code` | Run Ruff on backend |
+| `lint-ml-service` | Run Ruff on ml-service |
+| `lint-frontend` | Run ESLint on frontend |
+| `run-backend-tests` | Run pytest on backend |
+| `run-ml-service-tests` | Run pytest on ml-service |
+| `pre-commit-checks` | Full lint + test + commit workflow |
+| `principal-code-review` | AI code review using principal engineer agent |
 
-### Search First
-Prioritize getting videos searchable quickly
-- Transcription: 4 workers (critical priority)
-- Embedding Generation: 2 workers (critical priority)
-- Visual features: 1 worker each (low priority)
+### Agent Prompt
 
-### Visual First
-Prioritize object and face detection for visual navigation
-- Object Detection: 3 workers (critical priority, GPU)
-- Face Detection: 3 workers (critical priority, GPU)
-- Scene Detection: 2 workers (high priority)
+- `principal-software-engineer.agent.md` - Expert-level engineering guidance for code reviews, focusing on design patterns, SOLID principles, testing strategy, and technical debt management with GitHub issue creation
 
-### Low Resource
-Minimal resource usage for background processing
-- All tasks: 1 worker each
-- Max concurrent videos: 1
+## Related Documentation
 
-## Supported Video Formats
-
-- MP4
-- MOV
-- AVI
-- MKV
-
-## Roadmap
-
-### Phase 1: Core Platform (Current)
-- ✅ Requirements specification
-- ✅ Design specification
-- ✅ Implementation tasks
-- ⏳ Backend implementation
-- ⏳ Frontend implementation
-
-### Phase 2: Adobe Premiere Plugin
-- Integration with Adobe Premiere Pro
-- Direct timeline insertion
-- Seamless workflow integration
-
-### Phase 3: Advanced Features
-- Multi-language support
-- Action detection (optional)
-- Face clustering and recognition
-- Custom vocabulary support
+- [Architecture Evolution](./changes.md) - C4 diagrams, trade-offs, phases
+- [Development Log](./DEVLOG.md) - Timeline, decisions, challenges
+- [Attribution](./ATTRIBUTION.md) - Third-party libraries
+- [Presentation Script](./presentation-script.md) - Demo video script
 
 ## Contributing
 
-*Coming soon*
-
-## License
-
-*To be determined*
-
-## Acknowledgments
-
-- OpenAI Whisper for transcription
-- Ultralytics for YOLOv8
-- Facebook Research for FAISS
-- PySceneDetect for scene detection
-- sentence-transformers for embeddings
+See: [CONTRIBUTING](./CONTRIBUTING.md).

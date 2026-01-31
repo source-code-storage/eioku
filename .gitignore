@@ -68,7 +68,6 @@ tmp
 *.flv
 *.wmv
 *.m4v
-test-videos/
 
 # Model files and datasets
 *.pt
