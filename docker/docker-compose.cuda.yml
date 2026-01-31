@@ -1,0 +1,100 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: eioku
+      POSTGRES_PASSWORD: eioku_demo
+      POSTGRES_DB: eioku
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U eioku"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - eioku
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    command: valkey-server --appendonly yes
+    volumes:
+      - valkey_data:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - eioku
+
+  backend:
+    image: codihuston/eioku-backend:0.0.0
+    environment:
+      - DATABASE_URL=postgresql://eioku:eioku_demo@postgres:5432/eioku
+      - REDIS_URL=redis://valkey:6379
+    volumes:
+      - ../test-videos:/media:ro
+      - ../config:/app/config:ro
+      - thumbnails_data:/thumbnails
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    networks:
+      - eioku
+
+  frontend:
+    image: codihuston/eioku-frontend:0.0.0
+    networks:
+      - eioku
+
+  ml-service:
+    image: codihuston/eioku-ml-service:0.0.0
+    environment:
+      - DATABASE_URL=postgresql://eioku:eioku_demo@postgres:5432/eioku
+      - REDIS_URL=redis://valkey:6379
+      - NVIDIA_VISIBLE_DEVICES=all
+      - MODEL_CACHE_DIR=/models
+      - HF_HOME=/models/huggingface
+      - YOLO_HOME=/models/ultralytics
+      - EASYOCR_MODULE_PATH=/models/easyocr
+    volumes:
+      - ../test-videos:/media:ro
+      - thumbnails_data:/data/thumbnails
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    networks:
+      - eioku
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "9080:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - eioku
+
+networks:
+  eioku:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  valkey_data:
+  thumbnails_data:

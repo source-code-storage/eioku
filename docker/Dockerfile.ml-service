@@ -1,0 +1,55 @@
+# syntax=docker/dockerfile:1.4
+FROM pytorch/pytorch:2.1.2-cuda12.1-cudnn8-runtime
+
+ENV TZ=UTC
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install exiftool from pre-built distribution
+RUN curl -sL https://sourceforge.net/projects/exiftool/files/Image-ExifTool-13.47.tar.gz/download -o /tmp/Image-ExifTool-13.47.tar.gz && \
+    echo "97efd14de0fea5b29a689dad5334ea9c0600f3d64ebc062e30f3aa89fde3668c  /tmp/Image-ExifTool-13.47.tar.gz" | sha256sum -c - && \
+    tar -xzf /tmp/Image-ExifTool-13.47.tar.gz -C /tmp && \
+    cp /tmp/Image-ExifTool-13.47/exiftool /usr/local/bin/ && \
+    cp -r /tmp/Image-ExifTool-13.47/lib /usr/local/bin/ && \
+    chmod +x /usr/local/bin/exiftool && \
+    rm -rf /tmp/Image-ExifTool-13.47*
+
+RUN pip install --no-cache-dir poetry==1.7.1
+RUN poetry config virtualenvs.create false
+
+WORKDIR /app
+
+COPY ml-service/pyproject.toml ml-service/poetry.lock* ./
+RUN poetry install --no-root
+
+COPY ml-service/categories_places365.txt ./
+COPY ml-service/src ./src
+
+RUN mkdir -p /models/ultralytics /models/easyocr /models/huggingface && \
+    chmod 777 /models /models/ultralytics /models/easyocr /models/huggingface
+
+# Copy YOLO model files
+COPY ml-service/yolov8n.pt /models/ultralytics/
+COPY ml-service/yolov8n-face.pt /models/ultralytics/
+
+# Set model cache environment variables
+ENV HF_HOME=/models/huggingface
+ENV EASYOCR_MODULE_PATH=/models/easyocr
+ENV MODEL_CACHE_DIR=/models
+
+# Download Whisper model at build time (~1.5GB)
+RUN python -c "from faster_whisper import WhisperModel; WhisperModel('large-v3-turbo', device='cpu', compute_type='auto')"
+
+# Download EasyOCR models at build time (~100MB)
+RUN python -c "import easyocr; easyocr.Reader(['en'], gpu=False, verbose=False)"
+
+ENV NVIDIA_VISIBLE_DEVICES=all
+ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
+
+CMD ["python", "-m", "arq", "src.main_worker.App"]

@@ -3,7 +3,10 @@ import ArtifactGallery, { ArtifactSearchResult } from '../components/ArtifactGal
 /**
  * Props for the GalleryPage component.
  */
-interface GalleryPageProps {
+export interface GalleryPageProps {
+  /** Base URL for API calls (empty string for relative URLs) */
+  apiBaseUrl?: string;
+
   /**
    * Callback when user clicks on an artifact to navigate to the video player.
    * Called with the video_id and timestamp in milliseconds.
@@ -24,6 +27,7 @@ interface GalleryPageProps {
  * @requirements 5.4
  */
 export default function GalleryPage({
+  apiBaseUrl = '',
   onNavigateToVideo,
   onBack,
 }: GalleryPageProps) {
@@ -94,6 +98,7 @@ export default function GalleryPage({
         }}
       >
         <ArtifactGallery
+          apiBaseUrl={apiBaseUrl}
           onArtifactClick={handleArtifactClick}
         />
       </div>

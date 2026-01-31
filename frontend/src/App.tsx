@@ -3,6 +3,7 @@ import VideoGallery from './components/VideoGallery';
 import VideoPlayer from './components/VideoPlayer';
 import SearchPage, { SearchNavigationState } from './pages/SearchPage';
 import GalleryPage from './pages/GalleryPage';
+import { API_URL } from './config';
 
 /**
  * State passed from search page to player page.
@@ -82,6 +83,7 @@ function App() {
   if (view === 'search') {
     return (
       <SearchPage
+        apiUrl={API_URL}
         onNavigateToVideo={handleNavigateToVideo}
         onBack={handleBack}
         initialState={playerNavState?.formState}
@@ -93,6 +95,7 @@ function App() {
   if (view === 'artifact-gallery') {
     return (
       <GalleryPage
+        apiBaseUrl={API_URL}
         onNavigateToVideo={handleArtifactGalleryNavigateToVideo}
         onBack={handleBack}
       />
@@ -104,6 +107,7 @@ function App() {
     return (
       <VideoPlayer
         videoId={selectedVideoId}
+        apiUrl={API_URL}
         onBack={handleBack}
         initialTimestampMs={playerNavState?.initialTimestampMs}
         initialArtifactType={playerNavState?.formState?.artifactType}
@@ -173,7 +177,7 @@ function App() {
           </button>
         </div>
       </div>
-      <VideoGallery onSelectVideo={handleSelectVideo} />
+      <VideoGallery apiUrl={API_URL} onSelectVideo={handleSelectVideo} />
     </div>
   );
 }

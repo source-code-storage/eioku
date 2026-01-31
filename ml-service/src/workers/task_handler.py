@@ -83,7 +83,7 @@ async def process_ml_task(
         model_cache_dir = os.getenv("MODEL_CACHE_DIR", "/models")
         os.environ["HF_HOME"] = os.path.join(model_cache_dir, "huggingface")
         os.environ["YOLO_HOME"] = os.path.join(model_cache_dir, "ultralytics")
-        os.environ["EASYOCR_HOME"] = os.path.join(model_cache_dir, "easyocr")
+        os.environ["EASYOCR_MODULE_PATH"] = os.path.join(model_cache_dir, "easyocr")
 
         model_manager = ModelManager(cache_dir=model_cache_dir)
         logger.info(f"✅ Model manager initialized for task {task_id}")
