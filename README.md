@@ -60,15 +60,16 @@ Eioku transforms your video library into a searchable database. You film it, we 
 
 ### Limitations
 
-1. **Video discovery**: Videos are only discovered when the backend starts - no hot-reload for new files
-2. **Face search**: Face detection runs but face search/clustering is not implemented yet
-3. **No combined filters**: Global jump searches one artifact type at a time (can't search "dog AND tokyo")
-4. **Single language OCR**: OCR is configured for English only
-5. **No semantic search**: Text search is exact match only - no embeddings or similarity search yet
-6. **Transcription language**: Whisper auto-detects language but works best with English
-7. **GPS reverse geocoding**: Requires internet connection for location names
-8. **Large video files**: Very long videos (>1hr) may timeout during processing
-9. **No search suggestions**: No aggregation of available labels/terms - users must guess what to search for -- you
+1. **Some ML Models download per boot**: Each time the ml-service reboots, it may download some YOLO models, which will delay processing for up to a minute or so (I missed this during the build process >:|)
+2. **Video discovery**: Videos are only discovered when the backend starts - no hot-reload for new files
+3. **Face search**: Face detection runs but face search/clustering is not implemented yet
+4. **No combined filters**: Global jump searches one artifact type at a time (can't search "dog AND tokyo")
+5. **Single language OCR**: OCR is configured for English only
+6. **No semantic search**: Text search is exact match only - no embeddings or similarity search yet
+7. **Transcription language**: Whisper auto-detects language but works best with English
+8. **GPS reverse geocoding**: Requires internet connection for location names
+9. **Large video files**: Very long videos (>1hr) may timeout during processing
+10. **No search suggestions**: No aggregation of available labels/terms - users must guess what to search for -- you
 can view individual videos to get an idea for what does
 exist, but it's far from ideal (e.g., no "show me all detected objects or spoken words")
 
