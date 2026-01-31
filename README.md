@@ -1,4 +1,5 @@
 - [Eioku - Video Intelligence Platform](#eioku---video-intelligence-platform)
+  - [🎬 SEE THE VIDEO DEMO HERE! 🎬](#-see-the-video-demo-here-)
   - [What It Does](#what-it-does)
   - [Demo Checklist](#demo-checklist)
     - [Limitations](#limitations)
@@ -22,6 +23,7 @@
 
 Eioku transforms your video library into a searchable database. You film it, we index it, you find it.
 
+🎬 [SEE THE VIDEO DEMO HERE](https://www.youtube.com/watch?v=4DD5srIONn0)! 🎬
 ---
 
 ## What It Does
