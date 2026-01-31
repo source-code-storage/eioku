@@ -51,7 +51,7 @@ services:
       - eioku
 
   ml-service:
-    image: codihuston/eioku-ml-service-gpu:0.0.0
+    image: codihuston/eioku-ml-service:0.0.0
     environment:
       - DATABASE_URL=postgresql://eioku:eioku_demo@postgres:5432/eioku
       - REDIS_URL=redis://valkey:6379

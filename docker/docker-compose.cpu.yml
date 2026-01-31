@@ -53,7 +53,7 @@ services:
       - eioku
 
   ml-service:
-    image: codihuston/eioku-ml-service-cpu:0.0.0
+    image: codihuston/eioku-ml-service:0.0.0
     platform: linux/amd64
     environment:
       - DATABASE_URL=postgresql://eioku:eioku_demo@postgres:5432/eioku
