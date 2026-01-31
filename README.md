@@ -219,7 +219,7 @@ flowchart TD
 ### Specs (7 features)
 
 > Note: the architecture for this project evolved a lot as I made progress. Review
-> those changes here: [Architecture Evolution](./changes.md).
+> those changes here: [Architecture Evolution](./docs/changes.md).
 
 Each feature was designed using Kiro's requirements → design → tasks workflow.
 I made extensive use of the [principal-software-engineer.agent](.kiro/prompts/principal-software-engineer.agent.md) for software architecture decisions
@@ -266,10 +266,9 @@ User-triggered commands for common workflows:
 
 ## Related Documentation
 
-- [Architecture Evolution](./changes.md) - C4 diagrams, trade-offs, phases
+- [Architecture Evolution](./docs/changes.md) - C4 diagrams, trade-offs, phases
 - [Development Log](./DEVLOG.md) - Timeline, decisions, challenges
 - [Attribution](./ATTRIBUTION.md) - Third-party libraries
-- [Presentation Script](./presentation-script.md) - Demo video script
 
 ## Contributing
 
