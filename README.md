@@ -77,6 +77,13 @@ exist, but it's far from ideal (e.g., no "show me all detected objects or spoken
 
 ## Quick Start with Docker
 
+> Important: the ml-service image is very large due to containing
+> ML models (~10GB). It may take a while to pull depending on your
+> network.
+
+> Important: the images are only built for `amd64`, so expect
+> slower performance on Apple Silicon + Rosetta2.
+
 Two deployment options are available depending on your hardware:
 
 ### GPU (CUDA) - Recommended for NVIDIA GPUs

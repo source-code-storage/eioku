@@ -30,6 +30,7 @@ services:
 
   backend:
     image: codihuston/eioku-backend:0.0.0
+    platform: linux/amd64
     environment:
       - DATABASE_URL=postgresql://eioku:eioku_demo@postgres:5432/eioku
       - REDIS_URL=redis://valkey:6379
@@ -47,11 +48,13 @@ services:
 
   frontend:
     image: codihuston/eioku-frontend:0.0.0
+    platform: linux/amd64
     networks:
       - eioku
 
   ml-service:
     image: codihuston/eioku-ml-service-cpu:0.0.0
+    platform: linux/amd64
     environment:
       - DATABASE_URL=postgresql://eioku:eioku_demo@postgres:5432/eioku
       - REDIS_URL=redis://valkey:6379
@@ -74,7 +77,7 @@ services:
   nginx:
     image: nginx:alpine
     ports:
-      - "9081:80"
+      - "9080:80"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
